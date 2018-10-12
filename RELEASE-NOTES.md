@@ -6,4 +6,4 @@ First release:
 
 - Undertow `2.0.13.Final`.
 - JSON-encoded REST API framework.
-- API samples: `/api/samples/echo` & '/api/samples/info'
+- API samples: `/api/samples/echo` & `/api/samples/info`
