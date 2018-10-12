@@ -1,4 +1,4 @@
-# GitLab CI Runner configuration file for Play! Framework application
+# GitLab CI Runner configuration
 # By Thanh Nguyen <btnguyen2k@gmail.com>
 
 cache:
@@ -31,10 +31,13 @@ stages:
   - deploy
   - deploy-to-server
   - start-on-server
+  - docker-build
+  - docker-release
 
 build:
   stage: build
   script:
+    - whoami && pwd && date
     - sbt -Djline.terminal=jline.UnsupportedTerminal clean compile
 
 test:
@@ -44,8 +47,8 @@ test:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+    - whoami && pwd && date
     #- sbt -Djline.terminal=jline.UnsupportedTerminal test
-    - "test"
 
 deploy on build server:
   stage: deploy
@@ -54,7 +57,7 @@ deploy on build server:
     - /^staging-.*$/
   script:
     # So that current directory and datetie occur in log
-    - pwd && date
+    - whoami && pwd && date
     - mkdir -p $DIR_DEPLOY
     - sbt -Djline.terminal=jline.UnsupportedTerminal dist
     # Copy package .zip file to deploy directory
@@ -75,6 +78,7 @@ deploy to staging server:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+   - whoami && pwd && date
     - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_STAGING/$CI_PROJECT_NAME/apps"
   tags:
     - gitlabci-build
@@ -85,7 +89,8 @@ start service on staging server:
     - /^release-.*$/
     - /^staging-.*$/
   script:
-    - "ssh -f -i <private-key-file.pem> <user>@$SERVER_STAGING \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\"" 
+    - whoami && pwd && date
+    - "ssh -f -i <private-key-file.pem> <user>@$SERVER_STAGING \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
 
 deploy to production server 01:
   stage: deploy-to-server
@@ -93,6 +98,7 @@ deploy to production server 01:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+    - whoami && pwd && date
     - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_PRODUCTION_01/$CI_PROJECT_NAME/apps"
   tags:
     - gitlabci-build
@@ -105,6 +111,7 @@ deploy on production server 02:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+    - whoami && pwd && date
     - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_PRODUCTION_02/$CI_PROJECT_NAME/apps"
   # Manually deploy to production server!
   when: manual
@@ -115,6 +122,7 @@ start service on production server 01:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+    - whoami && pwd && date
     - "ssh -f -i <private-key-file.pem> <user>@$SERVER_PRODUCTION_01 \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
   # Manually start service on production server!
   when: manual
@@ -125,7 +133,35 @@ start service on production server 02:
     - /^release-.*$/
     - /^staging-.*$/
   script:
+    - whoami && pwd && date
     - "ssh -f -i <private-key-file.pem> <user>@$SERVER_PRODUCTION_02 \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
   # Manually start service on production server!
   when: manual
 
+build docker image:
+  stage: docker-build
+  only:
+    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t
+    - /^release-.*$/
+    - /^staging-.*$/
+  script:
+    - whoami && pwd && date
+    - sbt -Djline.terminal=jline.UnsupportedTerminal clean docker:stage
+    - docker build --force-rm --squash -t $DOCKER_REGISTRY_SERVER/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ./target/docker/stage
+  tags:
+    - gitlabci-build
+
+push to docker registry:
+  stage: docker-release
+  only:
+    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t
+    - /^release-.*$/
+    - /^staging-.*$/
+  script:
+    - whoami && pwd && date
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD $DOCKER_REGISTRY_SERVER
+    - docker push $DOCKER_REGISTRY_SERVER/$CI_PROJECT_NAME:$CI_PROJECT_VERSION
+    - docker rmi $(docker images -f "dangling=true" -q)
+  tags:
+    - gitlabci-build
+  when: manual
