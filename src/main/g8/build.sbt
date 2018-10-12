@@ -32,14 +32,14 @@ EclipseKeys.executionEnvironment     := Some(EclipseExecutionEnvironment.JavaSE1
 /* Docker packaging options */
 // Manual docker build:
 //// 1. dir\$ sbt clean docker:stage
-//// 2. dir\$ docker build --force-rm --squash -t $name$:$version$ ./target/docker/stage
+//// 2. dir\$ docker build --force-rm --squash -t $name$:$app_version$ ./target/docker/stage
 // Auto docker build (local):
 //// 1. dir\$ sbt clean docker:publishLocal
 dockerCommands := Seq()
 import com.typesafe.sbt.packager.docker._
 dockerCommands := Seq(
   Cmd("FROM"          , "openjdk:8-jre-alpine"),
-  Cmd("LABEL"         , "maintainer=\"$author$\""),
+  Cmd("LABEL"         , "maintainer=\"$app_author$\""),
   Cmd("ADD"           , "opt /opt"),
   Cmd("RUN"           , "apk add --no-cache -U tzdata bash && ln -s /opt/docker /opt/" + appName + " && chown -R daemon:daemon /opt && chmod 755 /opt/docker/conf/*.sh && chmod 755 /opt/docker/bin/*"),
   Cmd("RUN"           , "cp /usr/share/zoneinfo/$timezone$ /etc/localtime"),
@@ -88,20 +88,23 @@ val _slf4jVersion       = "1.7.25"
 val _undertowVersion    = "2.0.13.Final"
 val _jacksonVersion     = "2.9.7"
 val _ddthCommonsVersion = "0.9.1.7"
+val _ddthRecipesVersion = "0.2.0.1"
 
 libraryDependencies ++= Seq(
-    "org.slf4j"                   % "slf4j-api"                    % _slf4jVersion
-   ,"org.slf4j"                   % "log4j-over-slf4j"             % _slf4jVersion
-   ,"ch.qos.logback"              % "logback-classic"              % "1.2.3"
-   
-   ,"org.apache.commons"          % "commons-lang3"                % "3.8.1"
-   ,"com.typesafe"                % "config"                       % "1.3.3"
+    "org.slf4j"                     % "slf4j-api"                     % _slf4jVersion
+   ,"org.slf4j"                     % "log4j-over-slf4j"              % _slf4jVersion
+   ,"ch.qos.logback"                % "logback-classic"               % "1.2.3"
 
-   ,"io.undertow"                 % "undertow-core"                % _undertowVersion
-   ,"io.undertow"                 % "undertow-websockets-jsr"      % _undertowVersion
+   ,"org.apache.commons"            % "commons-lang3"                 % "3.8.1"
+   ,"com.typesafe"                  % "config"                        % "1.3.3"
 
-   ,"com.fasterxml.jackson.core"  % "jackson-core"                 % _jacksonVersion
-   ,"com.fasterxml.jackson.core"  % "jackson-databind"             % _jacksonVersion
+   ,"io.undertow"                   % "undertow-core"                 % _undertowVersion
+   ,"io.undertow"                   % "undertow-websockets-jsr"       % _undertowVersion
 
-   ,"com.github.ddth"             % "ddth-commons-core"            % _ddthCommonsVersion
+   ,"com.fasterxml.jackson.core"    % "jackson-core"                  % _jacksonVersion
+   ,"com.fasterxml.jackson.core"    % "jackson-databind"              % _jacksonVersion
+
+   ,"com.github.ddth"               % "ddth-commons-core"             % _ddthCommonsVersion
+   ,"com.github.ddth"               % "ddth-commons-serialization"    % _ddthCommonsVersion
+   ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
 )

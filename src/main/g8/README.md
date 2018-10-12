@@ -1,6 +1,6 @@
 # $name$
 
-$desc$ by $organization$, based from [gearmand-worker-java.g8](https://github.com/btnguyen2k/gearmand-worker-java.g8).
+$desc$ by $organization$, based on [microservices-undertow-seed.g8](https://github.com/btnguyen2k/microservices-undertow-seed.g8).
 
 Copyright (C) by $organization$.
 
@@ -16,34 +16,61 @@ Build Docker package: `sbt docker:stage`
 
 Build Docker image and publish to local: `sbt docker:publishLocal`
 
-**Configuration file**
 
-Application's configuration file: `conf/application.conf`.
+### Configurations
 
-Important configs:
-- Gearman servers: list of Gearman servers to connect to
-  - Config key: `gearman.servers`
-  - Type: `string`
-  - Format: `host1:port1,host2,host3:port3,...` (if no post is specified, assume default port `4830` is used)
-  - Example: `localhost,192.168.1.1:4731`
-  - Alternative: list of Gearmand servers can be set via system variable `GEARMAN_SERVERS`
-- Gearman functions: list of Gearman functions to subscribe
-  - Config key `gearman.functions`
-  - Type: `array of strings`
-  - Example `["function1","function2"]`
-- Job handlers: job handler settings
-  - Config key `gearman.handlers`
-  - Type: `map`
-  - Format: `{function_name = fully_qualified_class_name}`
-  - Example: `{
-    function1=com.github.btnguyen2k.gearmanworker.samples.HandlerForFunction1
-    function2=com.github.btnguyen2k.gearmanworker.samples.HandlerForFunction2
-  }`
-  - Special mapping `{_ = class_name}` will handle jobs from all functions if no other rules found.
+Application's main configuration file `conf/application.conf` in [HOCON format](https://github.com/lightbend/config/blob/master/HOCON.md).
 
-See more: http://www.scala-sbt.org/sbt-native-packager/formats/universal.html
+Important configurations:
 
-**Standalone application**
+```
+# application's name and version
+app {
+    version   = "app's version"
+    name      = "app's name"
+    shortname = "app's shortname"
+    fullname  = "app's full/long name"
+    desc      = "app's description"
+}
+```
+
+```
+# API configuirations
+api {
+    #API routings: map a URI to an API handler
+    routes {
+        "/api/samples/echo" {
+            #list of HTTP methods, "*" means "allow all methods"
+            allowed_methods = ["get","post"]
+            handler         = "echo"
+        }
+        "/api/samples/info" {
+            #list of HTTP methods, "*" means "allow all methods"
+            allowed_methods = ["*"]
+            handler         = "info"
+        }
+    }
+
+    #API handlers: <handler name> maps to <API class name>
+    #API must implement interface com.github.ddth.recipes.apiservice.IApiHandler
+    handlers {
+        echo = com.github.btnguyen2k.mus.samples.apihandlers.EchoApi
+        info = com.github.btnguyen2k.mus.samples.apihandlers.InfoApi
+    }
+}
+```
+
+### Start/Stop Scripts
+
+Commands:
+
+- Start: `sh conf/server-prod.sh start`
+- Stop : `sh conf/server-prod.sh stop`
+
+//TODO
+
+
+### Standalone application
 
 Standalone application (in `.zip` format)can be built via command `sbt universal:packageBin`. The generated `.zip` file will be created under directory `target/universal`.
 
@@ -51,10 +78,44 @@ Unzip the package and start the application with: `sh conf/server-prod.sh start`
 
 Stop the application with: `sh conf/server-prod.sh stop`
 
-**Docker Image**
 
-Docker image can be build in 2 ways:
-- Build Docker files with `sbt docker:stage`, generated files are placed under directory `target/docker`
-- Build Docker image and publish to local with `sbt docker:publishLocal`
+### Docker support
+
+Application can be packaged as a Docker image.
+
+1- Build and Publish Docker image locally
+
+```shell
+sbt docker:publishLocal
+```
+
+The command will build Docker image `$name$:$version$`.
+
+2- Build Docker image manually (more control over the final Docker image)
+
+Build project and generate necessary files to build Docker image (include `Dockerfile`)
+
+```shell
+sbt docker:stage
+```
+
+The command will create necessary files under directory `./target/docker/`
+
+The generated `Dockerfile` is ready-to-go but you are free to inspect and change it. Once you are happy, build Docker image normally, sample command:
+
+```shell
+docker build --force-rm --squash -t $name$:$version$ ./target/docker/stage
+```
 
 See more: http://www.scala-sbt.org/sbt-native-packager/formats/docker.html
+
+
+## LICENSE & COPYRIGHT
+
+See [LICENSE.md](LICENSE.md).
+
+Third party libraries are distributed under their own licenses.
+
+## Giter8 template
+
+For information on giter8 templates, please see http://www.foundweekends.org/giter8/
