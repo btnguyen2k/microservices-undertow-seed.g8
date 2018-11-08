@@ -89,7 +89,7 @@ Application can be packaged as a Docker image.
 sbt docker:publishLocal
 ```
 
-The command will build Docker image `$name$:$version$`.
+The command will build Docker image `$name$:$app_version$`.
 
 2- Build Docker image manually (more control over the final Docker image)
 
@@ -104,7 +104,7 @@ The command will create necessary files under directory `./target/docker/`
 The generated `Dockerfile` is ready-to-go but you are free to inspect and change it. Once you are happy, build Docker image normally, sample command:
 
 ```shell
-docker build --force-rm --squash -t $name$:$version$ ./target/docker/stage
+docker build --force-rm --squash -t $name$:$app_version$ ./target/docker/stage
 ```
 
 See more: http://www.scala-sbt.org/sbt-native-packager/formats/docker.html
