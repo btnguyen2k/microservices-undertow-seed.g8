@@ -114,7 +114,7 @@ docker build --force-rm --squash -t $name$:$app_version$ ./target/docker/stage
 
 ## LICENSE & COPYRIGHT
 
-See [LICENSE.md](LICENSE.md) for details. Copyright (c) 2018 Thanh Ba Nguyen.
+See [LICENSE.md](LICENSE.md) for details. Copyright (c) 2018-2019 Thanh Ba Nguyen.
 
 Third party libraries are distributed under their own licenses.
 
