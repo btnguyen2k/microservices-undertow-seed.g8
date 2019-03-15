@@ -4,8 +4,6 @@ import com.github.btnguyen2k.mus.utils.AppUtils;
 import com.github.ddth.commons.utils.DPathUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.ApiRouter;
-import com.github.ddth.recipes.apiservice.IApiHandler;
-import com.github.ddth.recipes.apiservice.auth.AllowAllApiAuthenticator;
 import com.typesafe.config.Config;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
@@ -37,8 +35,7 @@ public class Bootstrap {
         PathTemplateHandler rootHandler = new PathTemplateHandler(exchange -> {
             exchange.setStatusCode(404).
                     getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
-            exchange.getResponseSender()
-                    .send("No handler defined for URI [" + exchange.getRequestURI() + "]!");
+            exchange.getResponseSender().send("No handler defined for URI [" + exchange.getRequestURI() + "]!");
         }, true);
 
         Map<?, ?> apiRoutes = TypesafeConfigUtils.getObject(appConfig, "api.routes", Map.class);
@@ -47,16 +44,13 @@ public class Bootstrap {
                 exchange.setStatusCode(404).
                         getResponseHeaders().put(Headers.CONTENT_TYPE, "text/plain");
                 exchange.getResponseSender()
-                        .send("No API handler registered for URI [" + exchange.getRequestURI()
-                                + "]!");
+                        .send("No API handler registered for URI [" + exchange.getRequestURI() + "]!");
             };
-            int maxRequestDataSize = TypesafeConfigUtils
-                    .getBytesOptional(appConfig, "api.max_request_size")
+            int maxRequestDataSize = TypesafeConfigUtils.getBytesOptional(appConfig, "api.max_request_size")
                     .orElse((long) AppUtils.DEFAULT_MAX_REQUEST_SIZE).intValue();
             int requestTimeout = TypesafeConfigUtils
-                    .getDurationOptional(appConfig, "api" + ".request_timeout",
-                            TimeUnit.MILLISECONDS).orElse((long) AppUtils.DEFAULT_REQUEST_TIMEOUT)
-                    .intValue();
+                    .getDurationOptional(appConfig, "api" + ".request_timeout", TimeUnit.MILLISECONDS)
+                    .orElse((long) AppUtils.DEFAULT_REQUEST_TIMEOUT).intValue();
             apiRoutes.forEach((uriTemplate, handlerConfig) -> {
                 LOGGER.info("Setting up handler {}...", uriTemplate);
                 String handler = DPathUtils.getValue(handlerConfig, "handler", String.class);
@@ -67,8 +61,7 @@ public class Bootstrap {
                     LOGGER.error("No API handler registered for URI [" + uriTemplate + "]!");
                 } else {
                     rootHandler.add(uriTemplate.toString(),
-                            AppUtils.buildHttpHandler(apiRouter, maxRequestDataSize, requestTimeout,
-                                    handlerConfig));
+                            AppUtils.buildHttpHandler(apiRouter, maxRequestDataSize, requestTimeout, handlerConfig));
                 }
             });
         }
@@ -78,35 +71,22 @@ public class Bootstrap {
         return undertowServer;
     }
 
-    private static ApiRouter buildApiRouter(Config appConfig) {
-        ApiRouter apiRouter = new ApiRouter();
-        apiRouter.setApiAuthenticator(AllowAllApiAuthenticator.instance);
-        apiRouter.init();
-
-        Map<String, Object> apiHandlerConfig = TypesafeConfigUtils
-                .getObject(appConfig, "api.handlers", Map.class);
-        if (apiHandlerConfig != null) {
-            apiHandlerConfig.forEach((hName, hClazz) -> {
-                IApiHandler apiHandler = AppUtils
-                        .loadClassAndCreateObject(hClazz.toString(), IApiHandler.class);
-                if (apiHandler != null) {
-                    apiRouter.addApiHandler(hName, apiHandler);
-                    LOGGER.info(
-                            "Registered class [" + hClazz + "] for API handler [" + hName + "]!");
-                } else {
-                    LOGGER.warn("Cannot register API handler for [" + hName + "]!");
-                }
-            });
-        }
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> apiRouter.destroy()));
-        return apiRouter;
-    }
-
     public static void main(String[] args) {
-        Config appConfig = AppUtils.loadConfig("conf/application.conf");
-        ApiRouter apiRouter = buildApiRouter(appConfig);
-        Undertow undertowServer = buildUndertowServer(appConfig, apiRouter);
+        /*
+        Load configuration file, default location "conf/application.conf".
+        System's property "config.file" can override the location value.
+         */
+        AppUtils.APP_CONFIG = AppUtils.loadConfig("conf/application.conf");
+
+        /*
+        Build API routing table from configurations.
+         */
+        ApiRouter apiRouter = AppUtils.buildApiRouter(AppUtils.APP_CONFIG);
+
+        /*
+        Build undertow server.
+         */
+        Undertow undertowServer = buildUndertowServer(AppUtils.APP_CONFIG, apiRouter);
         undertowServer.start();
     }
 }

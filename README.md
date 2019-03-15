@@ -8,7 +8,7 @@ To create a new project from template:
 sbt new btnguyen2k/microservices-undertow-seed.g8
 ```
 
-Latest release: [template-v2.0.r1](RELEASE-NOTES.md).
+Latest release: [template-v2.0.r2](RELEASE-NOTES.md).
 
 ## Features
 
@@ -43,6 +43,12 @@ app {
 ```
 # API configuirations
 api {
+    #Name of HTTP header that holds "application id" info passed from client.
+    http_header_app_id = "X-App-Id"
+
+    #Name of HTTP header that holds "access token" info passed from client.
+    http_header_access_token = "X-Access-Token"
+
     #API routings: map a URI to an API handler
     routes {
         "/api/samples/echo" {

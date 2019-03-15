@@ -66,11 +66,13 @@ sources in (Compile, doc)                := Seq.empty
 publishArtifact in (Compile, packageDoc) := false
 publishArtifact in (Compile, packageSrc) := false
 autoScalaLibrary                         := false
-// add conf/ directory
-mappings in Universal                    ++= (baseDirectory.value / "conf" * "*" get) map(x => x -> ("conf/" + x.getName))
+
+// add conf/ directory: https://www.scala-sbt.org/sbt-native-packager/formats/universal.html#mappingshelper
+import NativePackagerHelper._
+mappings in Universal ++= directory(baseDirectory.value / "conf")
 
 
-/* Compiling  options */
+/* Compiling options */
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-encoding", "UTF-8")
 
 
@@ -86,10 +88,10 @@ EclipseKeys.executionEnvironment         := Some(EclipseExecutionEnvironment.Jav
 
 
 /* Dependencies */
-val _slf4jVersion       = "1.7.25"
-val _undertowVersion    = "2.0.13.Final"
-val _jacksonVersion     = "2.9.7"
-val _ddthCommonsVersion = "0.9.1.7"
+val _slf4jVersion       = "1.7.26"
+val _undertowVersion    = "2.0.19.Final"
+val _jacksonVersion     = "2.9.8"
+val _ddthCommonsVersion = "0.9.2"
 val _ddthRecipesVersion = "0.2.0.1"
 
 libraryDependencies ++= Seq(
@@ -97,8 +99,8 @@ libraryDependencies ++= Seq(
    ,"org.slf4j"                     % "log4j-over-slf4j"              % _slf4jVersion
    ,"ch.qos.logback"                % "logback-classic"               % "1.2.3"
 
-   ,"org.apache.commons"            % "commons-lang3"                 % "3.8.1"
-   ,"com.typesafe"                  % "config"                        % "1.3.3"
+//   ,"org.apache.commons"            % "commons-lang3"                 % "3.8.1"
+//   ,"com.typesafe"                  % "config"                        % "1.3.3"
 
    ,"io.undertow"                   % "undertow-core"                 % _undertowVersion
    ,"io.undertow"                   % "undertow-websockets-jsr"       % _undertowVersion
@@ -108,5 +110,6 @@ libraryDependencies ++= Seq(
 
    ,"com.github.ddth"               % "ddth-commons-core"             % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-serialization"    % _ddthCommonsVersion
+   ,"com.github.ddth"               % "ddth-commons-typesafeconfig"   % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
 )

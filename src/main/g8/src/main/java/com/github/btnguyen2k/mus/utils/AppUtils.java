@@ -3,7 +3,9 @@ package com.github.btnguyen2k.mus.utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.ddth.commons.utils.DPathUtils;
 import com.github.ddth.commons.utils.SerializationUtils;
+import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.*;
+import com.github.ddth.recipes.apiservice.auth.AllowAllApiAuthenticator;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigResolveOptions;
@@ -12,6 +14,7 @@ import io.undertow.UndertowOptions;
 import io.undertow.io.Receiver;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.util.AttachmentKey;
 import io.undertow.util.Headers;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -21,10 +24,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Application's utility class.
@@ -33,6 +33,16 @@ import java.util.Set;
  * @since template-v2.0.r1
  */
 public class AppUtils {
+
+    /**
+     * @since template-v2.0.r2
+     */
+    public final static AttachmentKey<ApiAuth> ATTKEY_API_AUTH = AttachmentKey.create(ApiAuth.class);
+
+    /**
+     * @since template-v2.0.r2
+     */
+    public static Config APP_CONFIG;
 
     public final static int DEFAULT_MAX_REQUEST_SIZE = 64 * 1024;
     public final static int DEFAULT_REQUEST_TIMEOUT = 10000;
@@ -78,8 +88,7 @@ public class AppUtils {
         }
     }
 
-    private static class MyPartialBytesCallback
-            implements Receiver.PartialBytesCallback, Receiver.ErrorCallback {
+    private static class MyPartialBytesCallback implements Receiver.PartialBytesCallback, Receiver.ErrorCallback {
         private int maxSize = 1024, timeoutMs = 10000;
         private int dataSize = 0, dataTime = 0;
         private long timestamp = System.currentTimeMillis();
@@ -95,9 +104,9 @@ public class AppUtils {
         @Override
         public void handle(HttpServerExchange exchange, byte[] message, boolean last) {
             if (exception != null) {
-                throw exception instanceof RuntimeException
-                        ? (RuntimeException) exception
-                        : new RuntimeException(exception);
+                throw exception instanceof RuntimeException ?
+                        (RuntimeException) exception :
+                        new RuntimeException(exception);
             }
 
             dataSize += message.length;
@@ -137,26 +146,34 @@ public class AppUtils {
         return params;
     }
 
-    public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize,
-            int requestTimeout, Object handlerConfig) {
+    /**
+     * Construct a {@link HttpHandler} to handle a HTTP request.
+     *
+     * @param apiRouter
+     * @param maxRequestDataSize
+     * @param requestTimeout
+     * @param handlerConfig
+     * @return
+     */
+    public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize, int requestTimeout,
+            Object handlerConfig) {
         String handler = DPathUtils.getValue(handlerConfig, "handler", String.class);
         Set<String> allowedMethods = buildAllowedMethods(handlerConfig);
         boolean allowAllMethods = allowedMethods.size() == 0 || allowedMethods.contains("*");
-        return exchange -> {
+        HttpHandler next = exchange -> {
             ApiResult apiResult;
             String method = exchange.getRequestMethod().toString();
             if (allowAllMethods || allowedMethods.contains(method)) {
                 ApiContext context = ApiContext.newContext("HTTP", handler);
-                ApiAuth auth = ApiAuth.NULL_API_AUTH;
+                ApiAuth auth = exchange.getAttachment(ATTKEY_API_AUTH);
                 try {
-                    apiResult = apiRouter.callApi(context, auth,
-                            parseParams(exchange, maxRequestDataSize, requestTimeout));
+                    apiResult = apiRouter
+                            .callApi(context, auth, parseParams(exchange, maxRequestDataSize, requestTimeout));
                 } catch (RequestSizeTooLargeException e) {
                     apiResult = new ApiResult(400, "Request size too large: " + e.size + " bytes.");
                 } catch (RequestTimeoutException e) {
                     apiResult = new ApiResult(400,
-                            "Request timed out while parsing request data: " + e.timeoutMs
-                                    + " ms.");
+                            "Request timed out while parsing request data: " + e.timeoutMs + " ms.");
                 } catch (Exception e) {
                     apiResult = new ApiResult(500, e.getMessage());
                 }
@@ -164,9 +181,13 @@ public class AppUtils {
                 apiResult = new ApiResult(403, "Method [" + method + "] is not allowed!");
             }
             exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
-            exchange.getResponseSender()
-                    .send(apiResult.asJson().toString(), StandardCharsets.UTF_8);
+            exchange.getResponseSender().send(apiResult.asJson().toString(), StandardCharsets.UTF_8);
         };
+        String httpHeaderAppId = TypesafeConfigUtils.getStringOptional(APP_CONFIG, "api.http_header_app_id")
+                .orElse("X-App-Id");
+        String httpHeaderAccessToken = TypesafeConfigUtils.getStringOptional(APP_CONFIG, "api.http_header_access_token")
+                .orElse("X-Access-Token");
+        return new ParseApiAuthHttpHandler(next, httpHeaderAppId, httpHeaderAccessToken);
     }
 
     /**
@@ -182,8 +203,7 @@ public class AppUtils {
         }
         String httpBind = ConfigUtils.getConfigAsString(appConfig, "api.http.address");
         httpBind = httpBind != null ? httpBind : "localhost";
-        Undertow.Builder builder = Undertow.builder()
-                .setServerOption(UndertowOptions.ENABLE_HTTP2, true);
+        Undertow.Builder builder = Undertow.builder().setServerOption(UndertowOptions.ENABLE_HTTP2, true);
         {
             LOGGER.info("Starting HTTP server on [" + httpBind + ":" + httpPort + "]...");
             builder.addHttpListener(httpPort, httpBind);
@@ -216,7 +236,9 @@ public class AppUtils {
     }
 
     /**
-     * Load application's config.
+     * Load application's configuration from file.
+     *
+     * <p>Configurations are first load from system property "config.file". If the system property is not defined, "defaultConfigFile" is used.</p>
      *
      * @param defaultConfigFile
      * @return
@@ -245,5 +267,33 @@ public class AppUtils {
                 .resolve(ConfigResolveOptions.defaults().setUseSystemEnvironment(true));
         LOGGER.info("Application config: {}", config);
         return config;
+    }
+
+    /**
+     * Build {@link ApiRouter} from configurations.
+     *
+     * @param appConfig
+     * @return
+     */
+    public static ApiRouter buildApiRouter(Config appConfig) {
+        ApiRouter apiRouter = new ApiRouter();
+        apiRouter.setApiAuthenticator(AllowAllApiAuthenticator.instance);
+        apiRouter.init();
+
+        Map<String, Object> apiHandlerConfig = TypesafeConfigUtils.getObject(appConfig, "api.handlers", Map.class);
+        if (apiHandlerConfig != null) {
+            apiHandlerConfig.forEach((hName, hClazz) -> {
+                IApiHandler apiHandler = AppUtils.loadClassAndCreateObject(hClazz.toString(), IApiHandler.class);
+                if (apiHandler != null) {
+                    apiRouter.addApiHandler(hName, apiHandler);
+                    LOGGER.info("Registered class [" + hClazz + "] for API handler [" + hName + "]!");
+                } else {
+                    LOGGER.warn("Cannot register API handler for [" + hName + "]!");
+                }
+            });
+        }
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> apiRouter.destroy()));
+        return apiRouter;
     }
 }
