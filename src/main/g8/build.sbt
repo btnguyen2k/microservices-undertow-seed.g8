@@ -64,9 +64,10 @@ sources in (Compile, doc)                := Seq.empty
 publishArtifact in (Compile, packageDoc) := false
 publishArtifact in (Compile, packageSrc) := false
 autoScalaLibrary                         := false
-// add conf/ directory
-mappings in Universal                    ++= (baseDirectory.value / "conf" * "*" get) map(x => x -> ("conf/" + x.getName))
 
+// add conf/ directory: https://www.scala-sbt.org/sbt-native-packager/formats/universal.html#mappingshelper
+import NativePackagerHelper._
+mappings in Universal ++= directory(baseDirectory.value / "conf")
 
 /* Compiling  options */
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-encoding", "UTF-8")
