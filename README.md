@@ -16,7 +16,7 @@ Latest release: [template-v2.0.r2](RELEASE-NOTES.md).
   - `sbt eclipse`: generate Eclipse project
   - `sbt run`: run project (for development)
   - `sbt universal:packageBin`: package project as a `.zip` file
-  - `sbt docker:publishLocal`: package project as docker image and publish to local
+  - `sbt docker:publishLocal`: package project as Docker image and publish to local
 - Start/Stop scripts (Linux shell scripts):
   - `start-dev.sh` for development environment
   - `conf/server-prod.sh` for production environment

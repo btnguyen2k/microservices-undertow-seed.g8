@@ -16,6 +16,7 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.Headers;
+import io.undertow.util.StatusCodes;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +34,6 @@ import java.util.*;
  * @since template-v2.0.r1
  */
 public class AppUtils {
-
     /**
      * @since template-v2.0.r2
      */
@@ -152,19 +152,40 @@ public class AppUtils {
      * @param apiRouter
      * @param maxRequestDataSize
      * @param requestTimeout
-     * @param handlerConfig
+     * @param handlerConfigMap   mapping {http-method-name:handler-name}
      * @return
      */
     public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize, int requestTimeout,
-            Object handlerConfig) {
-        String handler = DPathUtils.getValue(handlerConfig, "handler", String.class);
-        Set<String> allowedMethods = buildAllowedMethods(handlerConfig);
-        boolean allowAllMethods = allowedMethods.size() == 0 || allowedMethods.contains("*");
+            Map<?, ?> handlerConfigMap) {
+        return buildHttpHandler(apiRouter, maxRequestDataSize, requestTimeout, handlerConfigMap, null);
+    }
+
+    /**
+     * Construct a {@link HttpHandler} to handle a HTTP request.
+     *
+     * @param apiRouter
+     * @param maxRequestDataSize
+     * @param requestTimeout
+     * @param handlerConfigMap   mapping {http-method-name:handler-name}
+     * @param defaultHandler     default handler to invoked when no http-method matched
+     * @return
+     * @since template-v2.0.r3
+     */
+    public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize, int requestTimeout,
+            Map<?, ?> handlerConfigMap, HttpHandler defaultHandler) {
+        HttpHandler myDefaultHandler = defaultHandler != null ?
+                defaultHandler :
+                exchange -> exchange.setStatusCode(StatusCodes.NOT_IMPLEMENTED).endExchange();
+        Map<String, String> myHandlerConfigMap = new HashMap<>();
+        handlerConfigMap.forEach((k, v) -> myHandlerConfigMap.put(k.toString().toUpperCase(), v.toString()));
+        String catchAllHandlerName = myHandlerConfigMap.get("*");
         HttpHandler next = exchange -> {
-            ApiResult apiResult;
-            String method = exchange.getRequestMethod().toString();
-            if (allowAllMethods || allowedMethods.contains(method)) {
-                ApiContext context = ApiContext.newContext("HTTP", handler);
+            String handlerName = catchAllHandlerName != null ?
+                    catchAllHandlerName :
+                    myHandlerConfigMap.get(exchange.getRequestMethod().toString().toUpperCase());
+            if (handlerName != null) {
+                ApiResult apiResult;
+                ApiContext context = ApiContext.newContext("HTTP", handlerName);
                 ApiAuth auth = exchange.getAttachment(ATTKEY_API_AUTH);
                 try {
                     apiResult = apiRouter
@@ -177,11 +198,11 @@ public class AppUtils {
                 } catch (Exception e) {
                     apiResult = new ApiResult(500, e.getMessage());
                 }
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
+                exchange.getResponseSender().send(apiResult.asJson().toString(), StandardCharsets.UTF_8);
             } else {
-                apiResult = new ApiResult(403, "Method [" + method + "] is not allowed!");
+                myDefaultHandler.handleRequest(exchange);
             }
-            exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
-            exchange.getResponseSender().send(apiResult.asJson().toString(), StandardCharsets.UTF_8);
         };
         String httpHeaderAppId = TypesafeConfigUtils.getStringOptional(APP_CONFIG, "api.http_header_app_id")
                 .orElse("X-App-Id");
@@ -223,11 +244,11 @@ public class AppUtils {
         try {
             Class<?> objClass = Class.forName(className);
             if (!clazz.isAssignableFrom(objClass)) {
-                LOGGER.error("Class [" + className + "] must implement/extends [" + clazz + "]!");
+                LOGGER.error("Class [" + className + "] must implement/extends [" + clazz + "].");
             }
             return (T) objClass.newInstance();
         } catch (ClassNotFoundException e) {
-            LOGGER.warn("Cannot find class [" + className + "]!");
+            LOGGER.warn("Cannot find class [" + className + "].");
             return null;
         } catch (IllegalAccessException | InstantiationException e) {
             LOGGER.error(e.getMessage(), e);
@@ -248,18 +269,18 @@ public class AppUtils {
         File configFile = new File(cmdConfigFile);
         if (!configFile.isFile() || !configFile.canRead()) {
             if (StringUtils.equals(cmdConfigFile, defaultConfigFile)) {
-                String msg = "Cannot read from config file [" + configFile.getAbsolutePath() + "]!";
+                String msg = "Cannot read from config file [" + configFile.getAbsolutePath() + "].";
                 LOGGER.error(msg);
                 throw new RuntimeException(msg);
             } else {
                 LOGGER.warn("Configuration file [" + configFile.getAbsolutePath()
-                        + "], is invalid or not readable, fallback to default!");
+                        + "], is invalid or not readable, fallback to default.");
                 configFile = new File(defaultConfigFile);
             }
         }
         LOGGER.info("Loading configuration from [" + configFile + "]...");
         if (!configFile.isFile() || !configFile.canRead()) {
-            String msg = "Cannot read from config file [" + configFile.getAbsolutePath() + "]!";
+            String msg = "Cannot read from config file [" + configFile.getAbsolutePath() + "].";
             LOGGER.error(msg);
             throw new RuntimeException(msg);
         }
@@ -286,9 +307,9 @@ public class AppUtils {
                 IApiHandler apiHandler = AppUtils.loadClassAndCreateObject(hClazz.toString(), IApiHandler.class);
                 if (apiHandler != null) {
                     apiRouter.addApiHandler(hName, apiHandler);
-                    LOGGER.info("Registered class [" + hClazz + "] for API handler [" + hName + "]!");
+                    LOGGER.info("Registered class [" + hClazz + "] for API handler [" + hName + "].");
                 } else {
-                    LOGGER.warn("Cannot register API handler for [" + hName + "]!");
+                    LOGGER.warn("Cannot register API handler for [" + hName + "].");
                 }
             });
         }
