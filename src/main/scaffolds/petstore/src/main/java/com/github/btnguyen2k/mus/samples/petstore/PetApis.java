@@ -44,7 +44,7 @@ public class PetApis {
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) throws Exception {
             String id = params.getParam("id", String.class);
             PetModel pet = petStore.get(id);
-            return pet != null ? ApiResult.resultOk(pet) : ApiResult.DEFAULT_RESULT_NOT_FOUND;
+            return pet != null ? ApiResult.resultOk(pet.toMap()) : ApiResult.DEFAULT_RESULT_NOT_FOUND;
         }
     }
 
@@ -53,7 +53,7 @@ public class PetApis {
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) throws Exception {
             String id = params.getParam("id", String.class);
             PetModel pet = petStore.remove(id);
-            return pet != null ? ApiResult.resultOk(pet) : ApiResult.DEFAULT_RESULT_NOT_FOUND;
+            return pet != null ? ApiResult.resultOk(pet.toMap()) : ApiResult.DEFAULT_RESULT_NOT_FOUND;
         }
     }
 

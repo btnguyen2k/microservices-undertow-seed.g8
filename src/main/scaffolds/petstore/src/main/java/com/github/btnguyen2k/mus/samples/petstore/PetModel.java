@@ -43,6 +43,8 @@ public class PetModel extends BaseModel {
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>(super.toMap());
         map.put("name", name);
+        map.put("status", status);
+        map.put("category", category != null ? category.toMap() : null);
         return map;
     }
 
