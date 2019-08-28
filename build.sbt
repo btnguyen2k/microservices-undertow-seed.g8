@@ -79,6 +79,7 @@ EclipseKeys.projectFlavor            := EclipseProjectFlavor.Java               
 val _slf4jVersion       = "1.7.28"
 val _undertowVersion    = "2.0.25.Final"
 val _jacksonVersion     = "2.9.9"
+val _springVersion      = "5.1.9.RELEASE"
 val _ddthCommonsVersion = "1.1.0"
 val _ddthRecipesVersion = "1.0.0"
 
@@ -86,6 +87,14 @@ libraryDependencies ++= Seq(
     "org.slf4j"                     % "slf4j-api"                     % _slf4jVersion
    ,"org.slf4j"                     % "log4j-over-slf4j"              % _slf4jVersion
    ,"ch.qos.logback"                % "logback-classic"               % "1.2.3"
+
+   // RDMBS JDBC drivers & Connection Pool
+   ,"com.zaxxer"                    % "HikariCP"                      % "3.3.1"
+   //// comment out or remove unused JDBC drivers
+   ,"org.hsqldb"                    % "hsqldb"                        % "2.5.0"
+   //,"mysql"                         % "mysql-connector-java"          % "8.0.17"
+   //,"org.postgresql"                % "postgresql"                    % "42.2.6"
+   //,"com.microsoft.sqlserver"       % "mssql-jdbc"                    % "7.4.1.jre11"
 
    ,"org.apache.commons"            % "commons-lang3"                 % "3.9"
    ,"com.typesafe"                  % "config"                        % "1.3.4"
@@ -96,8 +105,16 @@ libraryDependencies ++= Seq(
    ,"com.fasterxml.jackson.core"    % "jackson-core"                  % _jacksonVersion
    ,"com.fasterxml.jackson.core"    % "jackson-databind"              % _jacksonVersion
 
+   ,"org.springframework"           % "spring-beans"                  % _springVersion
+   ,"org.springframework"           % "spring-expression"             % _springVersion
+   ,"org.springframework"           % "spring-context"                % _springVersion
+
    ,"com.github.ddth"               % "ddth-commons-core"             % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-serialization"    % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-typesafeconfig"   % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
+
+   ,"org.webjars"                   % "swagger-ui"                    % "3.23.5"
+   ,"javax"                         % "javaee-api"                    % "8.0.1"
+   ,"io.swagger.core.v3"            % "swagger-annotations"           % "2.0.9"
 )

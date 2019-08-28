@@ -2,6 +2,7 @@ package com.github.btnguyen2k.mus.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.ddth.commons.utils.DPathUtils;
+import com.github.ddth.commons.utils.MapUtils;
 import com.github.ddth.commons.utils.SerializationUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.*;
@@ -20,6 +21,9 @@ import io.undertow.util.StatusCodes;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AssignableTypeFilter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -43,6 +47,13 @@ public class AppUtils {
      * @since template-v2.0.r2
      */
     public static Config APP_CONFIG;
+    public static String GLOBAL_KEY_APP_CONFIG = "APP_CONFIG";
+
+    /**
+     * @since template-v2.0.r3
+     */
+    public static ApiRouter API_ROUTER;
+    public static String GLOBAL_KEY_API_ROUTER = "API_ROUTER";
 
     public final static int DEFAULT_MAX_REQUEST_SIZE = 64 * 1024;
     public final static int DEFAULT_REQUEST_TIMEOUT = 10000;
@@ -152,11 +163,11 @@ public class AppUtils {
      * @param apiRouter
      * @param maxRequestDataSize
      * @param requestTimeout
-     * @param handlerConfigMap   mapping {http-method-name:handler-name}
+     * @param handlerConfigMap   mapping {http-method-name:api-spec}
      * @return
      */
     public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize, int requestTimeout,
-            Map<?, ?> handlerConfigMap) {
+            Map<String, ApiSpec> handlerConfigMap) {
         return buildHttpHandler(apiRouter, maxRequestDataSize, requestTimeout, handlerConfigMap, null);
     }
 
@@ -166,18 +177,18 @@ public class AppUtils {
      * @param apiRouter
      * @param maxRequestDataSize
      * @param requestTimeout
-     * @param handlerConfigMap   mapping {http-method-name:handler-name}
+     * @param handlerConfigMap   mapping {http-method-name:api-spec}
      * @param defaultHandler     default handler to invoked when no http-method matched
      * @return
      * @since template-v2.0.r3
      */
     public static HttpHandler buildHttpHandler(ApiRouter apiRouter, int maxRequestDataSize, int requestTimeout,
-            Map<?, ?> handlerConfigMap, HttpHandler defaultHandler) {
+            Map<String, ApiSpec> handlerConfigMap, HttpHandler defaultHandler) {
         HttpHandler myDefaultHandler = defaultHandler != null ?
                 defaultHandler :
                 exchange -> exchange.setStatusCode(StatusCodes.NOT_IMPLEMENTED).endExchange();
         Map<String, String> myHandlerConfigMap = new HashMap<>();
-        handlerConfigMap.forEach((k, v) -> myHandlerConfigMap.put(k.toString().toUpperCase(), v.toString()));
+        handlerConfigMap.forEach((k, v) -> myHandlerConfigMap.put(k.toUpperCase(), v.getHandlerName()));
         String catchAllHandlerName = myHandlerConfigMap.get("*");
         HttpHandler next = exchange -> {
             String handlerName = catchAllHandlerName != null ?
@@ -316,5 +327,55 @@ public class AppUtils {
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> apiRouter.destroy()));
         return apiRouter;
+    }
+
+    /**
+     * @param appConfig
+     * @return
+     * @since template-v2.0.r3
+     */
+    public static Map<String, Map<String, ApiSpec>> buildEndpoints(Config appConfig) {
+        Map<String, Map<String, ApiSpec>> endpoints = new TreeMap<>();
+
+        //first, build endpoints from application configurations
+        Map<?, ?> apiEndpoints = TypesafeConfigUtils.getObject(appConfig, "api.endpoints", Map.class);
+        if (apiEndpoints != null) {
+            apiEndpoints.forEach((uriTemplate, _handlerConfig) -> {
+                if (!(_handlerConfig instanceof Map)) {
+                    LOGGER.warn(
+                            "Invalid handler configurations. Expecting a map, but received " + _handlerConfig.getClass()
+                                    + " / " + _handlerConfig);
+                } else {
+                    Map<String, String> myHandlerConfigMap = new HashMap<>();
+                    ((Map<?, ?>) _handlerConfig)
+                            .forEach((k, v) -> myHandlerConfigMap.put(k.toString().toUpperCase(), v.toString()));
+                    String catchAllHandlerName = myHandlerConfigMap.get("*");
+                    if (!StringUtils.isBlank(catchAllHandlerName)) {
+                        //default is GET
+                        endpoints.put(uriTemplate.toString(),
+                                MapUtils.createMap("get", new ApiSpec(catchAllHandlerName)));
+                    } else {
+                        Map<String, ApiSpec> handlerMappings = new TreeMap<>();
+                        myHandlerConfigMap
+                                .forEach((method, handler) -> handlerMappings.put(method, new ApiSpec(handler)));
+                        endpoints.put(uriTemplate.toString(), handlerMappings);
+                    }
+                }
+            });
+        }
+
+        //second, build endpoints from class annotations
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AssignableTypeFilter(IApiHandler.class));
+        List<String> scanPackages = TypesafeConfigUtils.getStringList(appConfig, "api.scan_packages");
+        if (scanPackages != null && scanPackages.size() > 0) {
+            for (String scanPackage : scanPackages) {
+                for (BeanDefinition bd : scanner.findCandidateComponents(scanPackage)) {
+                    System.out.println(bd.getBeanClassName());
+                }
+            }
+        }
+
+        return endpoints;
     }
 }
