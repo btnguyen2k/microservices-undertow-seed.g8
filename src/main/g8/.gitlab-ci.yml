@@ -36,6 +36,9 @@ build:
   script:
     - whoami && pwd && date
     - sbt -ivy ~/.ivy2/$CI_PROJECT_NAME -Djline.terminal=jline.UnsupportedTerminal clean compile
+  tags:
+    - gitlabci-build
+    - java11
 
 test:
   stage: test
@@ -47,6 +50,9 @@ test:
   script:
     - whoami && pwd && date
     #- sbt -ivy ~/.ivy2/$CI_PROJECT_NAME -Djline.terminal=jline.UnsupportedTerminal test
+  tags:
+    - gitlabci-build
+    - java11
 
 build docker image:
   stage: docker-build
@@ -74,7 +80,6 @@ push test to docker registry:
     - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-test
   tags:
     - gitlabci-build
-    - java11
   when: manual
 
 push staging to docker registry:
@@ -88,7 +93,6 @@ push staging to docker registry:
     - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-staging
   tags:
     - gitlabci-build
-    - java11
   when: manual
 
 push release to docker registry:
@@ -103,5 +107,5 @@ push release to docker registry:
     - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:latest
   tags:
     - gitlabci-build
-    - java11
   when: manual
+
