@@ -1,4 +1,4 @@
-# GitLab CI Runner configuration
+# Sample GitLab CI Runner configuration
 # By Thanh Nguyen <btnguyen2k@gmail.com>
 
 cache:
@@ -6,11 +6,13 @@ cache:
     - target/
 
 variables:
-  # IP addresses of servers
-  SERVER_PRODUCTION_01: 10.100.1.1
-  SERVER_PRODUCTION_02: 10.100.10.1
-  SERVER_STAGING: 192.168.0.1
-  DIR_DEPLOY: /home/<user>/gitlabci/deploys/$CI_PROJECT_NAME
+  ## These variables should bbe set via protected env variables
+  #DOCKER_REGISTRY_SERVER: ""
+  #DOCKER_REGISTRY_USER: ""
+  #DOCKER_REGISTRY_PASSWORD: ""
+  ## For private registry, namespace is blank normally.
+  ## For public registry (e.g. hub.docker.com), namespace is usually "/username"
+  DOCKER_REGISTRY_NAMESPACE: ""
 
 before_script:
   # Setup http proxy if needed
@@ -20,17 +22,12 @@ before_script:
   - whoami && pwd && date
   - "export CI_PROJECT_VERSION=`echo $CI_COMMIT_REF_NAME | cut -d'-' -f 2`"
   - "echo CI_PROJECT_VERSION: $CI_COMMIT_REF_NAME --\\> $CI_PROJECT_VERSION"
-  - "export CI_PROJECT_DEPLOY_DIR=$DIR_DEPLOY/$CI_PROJECT_NAME-$CI_PROJECT_VERSION"
-  - "echo CI_PROJECT_DEPLOY_DIR: $CI_PROJECT_DEPLOY_DIR"
 
 after_script:
 
 stages:
   - build
   - test
-  - deploy
-  - deploy-to-server
-  - start-on-server
   - docker-build
   - docker-release
 
@@ -38,130 +35,73 @@ build:
   stage: build
   script:
     - whoami && pwd && date
-    - sbt -Djline.terminal=jline.UnsupportedTerminal clean compile
+    - sbt -ivy ~/.ivy2/$CI_PROJECT_NAME -Djline.terminal=jline.UnsupportedTerminal clean compile
 
 test:
   stage: test
   only:
-    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t
+    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t or test-x.y.z.t
     - /^release-.*$/
     - /^staging-.*$/
+    - /^test-.*$/
   script:
     - whoami && pwd && date
-    #- sbt -Djline.terminal=jline.UnsupportedTerminal test
-
-deploy on build server:
-  stage: deploy
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    # So that current directory and datetie occur in log
-    - whoami && pwd && date
-    - mkdir -p $DIR_DEPLOY
-    - sbt -Djline.terminal=jline.UnsupportedTerminal dist
-    # Copy package .zip file to deploy directory
-    - cp ./target/universal/$CI_PROJECT_NAME-$CI_PROJECT_VERSION.zip $DIR_DEPLOY
-    # Safeguard check
-    - "if [ -d $CI_PROJECT_DEPLOY_DIR ]; then echo 'Directory $CI_PROJECT_DEPLOY_DIR already existed!'; false; else true; fi"
-    - unzip $DIR_DEPLOY/$CI_PROJECT_NAME-$CI_PROJECT_VERSION.zip -d $DIR_DEPLOY
-    # Recreate soft link to newly unzipped package directory
-    - rm -f $DIR_DEPLOY/$CI_PROJECT_NAME
-    - ln -sf $CI_PROJECT_DEPLOY_DIR $DIR_DEPLOY/$CI_PROJECT_NAME
-  tags:
-    # Only run this task on GitLab CI Runner with tag "gitlabci-build"
-    - gitlabci-build
-
-deploy to staging server:
-  stage: deploy-to-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-   - whoami && pwd && date
-    - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_STAGING/$CI_PROJECT_NAME/apps"
-  tags:
-    - gitlabci-build
-
-start service on staging server:
-  stage: start-on-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    - whoami && pwd && date
-    - "ssh -f -i <private-key-file.pem> <user>@$SERVER_STAGING \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
-
-deploy to production server 01:
-  stage: deploy-to-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    - whoami && pwd && date
-    - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_PRODUCTION_01/$CI_PROJECT_NAME/apps"
-  tags:
-    - gitlabci-build
-  # Manually deploy to production server!
-  when: manual
-
-deploy on production server 02:
-  stage: deploy-to-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    - whoami && pwd && date
-    - "rsync -v -rlkHpEXtz --delete $CI_PROJECT_DEPLOY_DIR/* rsync://$SERVER_PRODUCTION_02/$CI_PROJECT_NAME/apps"
-  # Manually deploy to production server!
-  when: manual
-
-start service on production server 01:
-  stage: start-on-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    - whoami && pwd && date
-    - "ssh -f -i <private-key-file.pem> <user>@$SERVER_PRODUCTION_01 \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
-  # Manually start service on production server!
-  when: manual
-
-start service on production server 02:
-  stage: start-on-server
-  only:
-    - /^release-.*$/
-    - /^staging-.*$/
-  script:
-    - whoami && pwd && date
-    - "ssh -f -i <private-key-file.pem> <user>@$SERVER_PRODUCTION_02 \"cd scripts && ./$CI_PROJECT_NAME restart > /dev/null 2>&1\""
-  # Manually start service on production server!
-  when: manual
+    #- sbt -ivy ~/.ivy2/$CI_PROJECT_NAME -Djline.terminal=jline.UnsupportedTerminal test
 
 build docker image:
   stage: docker-build
   only:
-    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t
+    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t or test-x.y.z.t
     - /^release-.*$/
     - /^staging-.*$/
+    - /^test-.*$/
   script:
     - whoami && pwd && date
-    - sbt -Djline.terminal=jline.UnsupportedTerminal clean docker:stage
-    - docker build --force-rm --squash -t $DOCKER_REGISTRY_SERVER/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ./target/docker/stage
+    - sbt -ivy ~/.ivy2/$CI_PROJECT_NAME -Djline.terminal=jline.UnsupportedTerminal clean docker:stage
+    - docker build --force-rm --squash -t ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ./target/docker/stage
   tags:
     - gitlabci-build
+    - java11
 
-push to docker registry:
+push test to docker registry:
   stage: docker-release
   only:
-    # Run ony if commit has tag release-x.y.z.t or staging-x.y.z.t
-    - /^release-.*$/
+    - /^test-.*$/
+  script:
+    - whoami && pwd && date
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD $DOCKER_REGISTRY_SERVER
+    - docker tag ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-test
+    - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-test
+  tags:
+    - gitlabci-build
+    - java11
+  when: manual
+
+push staging to docker registry:
+  stage: docker-release
+  only:
     - /^staging-.*$/
   script:
     - whoami && pwd && date
     - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD $DOCKER_REGISTRY_SERVER
-    - docker push $DOCKER_REGISTRY_SERVER/$CI_PROJECT_NAME:$CI_PROJECT_VERSION
-    - docker rmi $(docker images -f "dangling=true" -q)
+    - docker tag ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-staging
+    - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION-staging
   tags:
     - gitlabci-build
+    - java11
+  when: manual
+
+push release to docker registry:
+  stage: docker-release
+  only:
+    - /^release-.*$/
+  script:
+    - whoami && pwd && date
+    - docker login -u $DOCKER_REGISTRY_USER -p $DOCKER_REGISTRY_PASSWORD $DOCKER_REGISTRY_SERVER
+    - docker tag ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:latest
+    - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:$CI_PROJECT_VERSION
+    - docker push ${DOCKER_REGISTRY_SERVER}${DOCKER_REGISTRY_NAMESPACE}/$CI_PROJECT_NAME:latest
+  tags:
+    - gitlabci-build
+    - java11
   when: manual
