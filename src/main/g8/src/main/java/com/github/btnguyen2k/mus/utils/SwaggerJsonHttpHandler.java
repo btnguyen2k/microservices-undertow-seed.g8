@@ -101,11 +101,11 @@ public class SwaggerJsonHttpHandler implements HttpHandler {
                 }
 
                 List<ApiSpec.ApiParameter> apiParameters = spec.getParameters();
+                List<Map<String, Object>> parameters = new ArrayList<>();
+                epSpec.put("parameters", parameters);
+                Map<String, Map<String, Object>> bodyParameters = new HashMap<>();
                 if (apiParameters != null && apiParameters.size() > 0) {
-                    List<Map<String, Object>> parameters = new ArrayList<>();
-                    epSpec.put("parameters", parameters);
                     List<String> requiredBBodyParameters = new ArrayList<>();
-                    Map<String, Map<String, Object>> bodyParameters = new HashMap<>();
                     apiParameters.forEach(apiParam -> {
                         if (apiParam.getIn().equalsIgnoreCase("body")) {
                             bodyParameters.put(apiParam.getName(),
@@ -128,7 +128,6 @@ public class SwaggerJsonHttpHandler implements HttpHandler {
                             parameters.add(paramObj);
                         }
                     });
-
                     if (bodyParameters.size() > 0) {
                         Map<String, Object> bodyParam = MapUtils
                                 .createMap("in", "body", "name", "_body_", "description",
@@ -137,6 +136,12 @@ public class SwaggerJsonHttpHandler implements HttpHandler {
                                                 "properties", bodyParameters));
                         parameters.add(bodyParam);
                     }
+                }
+                if (bodyParameters.size() == 0 && (method.equalsIgnoreCase("POST") || method.equalsIgnoreCase("PUT"))) {
+                    //special case: if POST or PUT and body parameters are not defined: create a default body parameter
+                    Map<String, Object> bodyParam = MapUtils.createMap("in", "body", "name", "_body_", "description",
+                            "Parameters passed via request body.", "schema", MapUtils.createMap("type", "object"));
+                    parameters.add(bodyParam);
                 }
             });
         });

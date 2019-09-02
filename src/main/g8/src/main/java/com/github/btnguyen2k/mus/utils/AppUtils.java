@@ -398,8 +398,7 @@ public class AppUtils {
             cachedEnpoints = new TreeMap<>();
 
             //build endpoints from annotation
-            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(
-                    appConfig);
+            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(appConfig);
             annotatedHandlers.forEach(entry -> {
                 Operation operation = entry.annotations.iterator().next();
                 ApiSpec apiSpec = ApiSpec.newInstance(operation);

@@ -16,8 +16,7 @@ import java.util.Map;
  */
 public class MusApis {
     public static class Info implements IApiHandler {
-        @Operation(operationId = "info", method = "GET:/info", tags = {
-                "mus" }, summary = "Return information about API server.")
+        @Operation(operationId = "info", method = "GET:/info", tags = { "mus" }, summary = "Return information about API server.")
         @Override
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) {
             Map<String, Object> data = new HashMap<>();

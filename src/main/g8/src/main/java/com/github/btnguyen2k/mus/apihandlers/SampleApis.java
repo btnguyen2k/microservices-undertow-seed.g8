@@ -1,21 +1,20 @@
 package com.github.btnguyen2k.mus.apihandlers;
 
 import com.github.ddth.recipes.apiservice.*;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import io.swagger.v3.oas.annotations.Operation;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 
 public class SampleApis {
-    static Cache<String, byte[]> cache = buildCache();
+    private static Map<String, byte[]> cache = buildCache();
 
-    static Cache<String, byte[]> buildCache() {
-        return CacheBuilder.newBuilder().expireAfterWrite(1000, TimeUnit.MILLISECONDS).build();
+    private static Map<String, byte[]> buildCache() {
+        return new HashMap<>();
     }
 
-    static String format(double bytes, int digits) {
+    private static String format(double bytes, int digits) {
         String[] dictionary = { "bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
         int index = 0;
         for (index = 0; index < dictionary.length; index++) {
@@ -27,7 +26,7 @@ public class SampleApis {
         return String.format("%." + digits + "f", bytes) + " " + dictionary[index];
     }
 
-    static Map<String, Object> memInfo() {
+    private static Map<String, Object> memInfo() {
         Runtime runtime = Runtime.getRuntime();
         Map<String, Object> memInfo = new TreeMap<>();
         memInfo.put("3.free ", format(runtime.freeMemory(), 2));
@@ -37,6 +36,7 @@ public class SampleApis {
     }
 
     public static class MemInfoApi implements IApiHandler {
+        @Operation(operationId = "memInfo", summary = "Return current application memory information.")
         @Override
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) {
             return new ApiResult(ApiResult.STATUS_OK, ApiResult.MSG_OK, memInfo());
@@ -47,7 +47,11 @@ public class SampleApis {
         @Override
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) {
             Map<String, Object> memInfo = memInfo();
-            Integer requestMemMb = params.getParamOptional("size", Integer.class).orElse(0);
+            //accept either parameter "mem" or "size"
+            Integer requestMemMb = params.getParamOptional("mem", Integer.class).orElse(null);
+            if (requestMemMb == null) {
+                requestMemMb = params.getParamOptional("size", Integer.class).orElse(0);
+            }
             memInfo.put("a.requested", format(requestMemMb * 1024 * 1024, 2));
             if (requestMemMb.intValue() > 0) {
                 long start = System.currentTimeMillis();
