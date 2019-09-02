@@ -4,7 +4,6 @@ import com.github.ddth.recipes.apiservice.*;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 
-import javax.ws.rs.Path;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;

@@ -1,5 +1,28 @@
 # microservices-undertow-seed.g8 Release Notes
 
+## 2019-09-01: template-v2.0.r3
+
+- Undertow `2.0.25.Final`
+- Upgrade dependency libs.
+- Swagger support:
+  - Auto generate Swagger API spec file in JSON format.
+  - Bundle Swagger-UI
+  - Annotate API with `io.swagger.v3.oas.annotations.Operation`.
+- WebJars support.
+- APIs can now be defined in application configuration files or via `io.swagger.v3.oas.annotations.Operation` annotation.
+- Add scaffold `petstore`.
+- Additional bootstrappers via configuration `bootstrappers`:
+  - Builtin `SpringApplicationContextBootstrapper`
+- JVM tuning:
+  - `server-prod.sh`: `-J-XX:+UseParallelGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100`
+  - `server-docker.sh`: `-J-XX:+UseSerialGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100`
+
+**Breakng changes:**
+- **Migrate to `Java11`**.
+- Configuration changes:
+  - `api.routes` is replaced by `api.endpoints`
+
+
 ## 2019-03-15: template-v2.0.r2
 
 - Undertow `2.0.19.Final`.

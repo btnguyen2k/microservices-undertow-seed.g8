@@ -81,6 +81,7 @@ val _undertowVersion    = "2.0.25.Final"
 val _jacksonVersion     = "2.9.9"
 val _springVersion      = "5.1.9.RELEASE"
 val _ddthCommonsVersion = "1.1.0"
+val _ddthDao            = "1.1.1"
 val _ddthRecipesVersion = "1.0.0"
 
 libraryDependencies ++= Seq(
@@ -100,7 +101,7 @@ libraryDependencies ++= Seq(
    ,"com.typesafe"                  % "config"                        % "1.3.4"
 
    ,"io.undertow"                   % "undertow-core"                 % _undertowVersion
-   ,"io.undertow"                   % "undertow-websockets-jsr"       % _undertowVersion
+   //,"io.undertow"                   % "undertow-websockets-jsr"       % _undertowVersion
 
    ,"com.fasterxml.jackson.core"    % "jackson-core"                  % _jacksonVersion
    ,"com.fasterxml.jackson.core"    % "jackson-databind"              % _jacksonVersion
@@ -113,8 +114,10 @@ libraryDependencies ++= Seq(
    ,"com.github.ddth"               % "ddth-commons-serialization"    % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-typesafeconfig"   % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
+   ,"com.github.ddth"               % "ddth-dao-core"                 % _ddthDao
+   ,"com.github.ddth"               % "ddth-dao-jdbc"                 % _ddthDao
 
+   ,"org.webjars"                   % "webjars-locator-core"          % "0.40"
    ,"org.webjars"                   % "swagger-ui"                    % "3.23.5"
-   ,"javax"                         % "javaee-api"                    % "8.0.1"
    ,"io.swagger.core.v3"            % "swagger-annotations"           % "2.0.9"
 )

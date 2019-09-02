@@ -1,6 +1,6 @@
 # $name$ Release Notes
 
-## v0.1.0 - yyyy-MM-dd
+## yyyy-MM-dd - v0.1.0
 
 First release:
 

@@ -3,8 +3,7 @@ package com.github.btnguyen2k.mus.apihandlers;
 import com.github.btnguyen2k.mus.utils.AppUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.*;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.tags.Tags;
+import io.swagger.v3.oas.annotations.Operation;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,8 +15,9 @@ import java.util.Map;
  * @since template-v2.0.r3
  */
 public class MusApis {
-    @Tags({ @Tag(name = "mus") })
     public static class Info implements IApiHandler {
+        @Operation(operationId = "info", method = "GET:/info", tags = {
+                "mus" }, summary = "Return information about API server.")
         @Override
         public ApiResult handle(ApiContext context, ApiAuth auth, ApiParams params) {
             Map<String, Object> data = new HashMap<>();

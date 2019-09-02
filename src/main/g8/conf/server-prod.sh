@@ -23,7 +23,7 @@ popd > /dev/null
 # Override environment variables if needed after the next line
 . \$_basedir/env.sh
 
-DEFAULT_APP_LOGBACK=logback-prod.xml
+DEFAULT_APP_LOGBACK=./conf/logback-prod.xml
 
 APP_LOGBACK=\$DEFAULT_APP_LOGBACK
 
@@ -42,14 +42,16 @@ doStart() {
     if [ "\$APP_NOPROXY_HOST" != "" ]; then
         RUN_CMD+=(-Dhttp.nonProxyHosts=\$APP_NOPROXY_HOST)
     fi
-    RUN_CMD+=(-Djava.awt.headless=true -Djava.net.preferIPv4Stack=true -J-server -J-Xms\${APP_MEM}m -J-Xmx\${APP_MEM}m)
+    RUN_CMD+=(-Djava.awt.headless=true -Djava.net.preferIPv4Stack=true -J-server -J-Xms\${APP_MIN_MEM}m -J-Xmx\${APP_MEM}m)
     RUN_CMD+=(-J-XX:+UseThreadPriorities -J-XX:ThreadPriorityPolicy=42 -J-XX:+HeapDumpOnOutOfMemoryError -J-Xss256k)
     RUN_CMD+=(-J-XX:+UseTLAB -J-XX:+ResizeTLAB -J-XX:+UseNUMA -J-XX:+PerfDisableSharedMem)
-    RUN_CMD+=(-J-XX:+UseG1GC -J-XX:G1RSetUpdatingPauseTimePercent=5 -J-XX:MaxGCPauseMillis=500)
+    RUN_CMD+=(-J-XX:+ExitOnOutOfMemoryError -J-XX:+CrashOnOutOfMemoryError)
+    RUN_CMD+=(-J-XX:+UseParallelGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100)
+    #RUN_CMD+=(-J-XX:+UseG1GC -J-XX:G1RSetUpdatingPauseTimePercent=5 -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100)
     RUN_CMD+=(-J-XX:+PrintGCDetails -J-XX:+PrintGCDateStamps -J-XX:+PrintHeapAtGC -J-XX:+PrintTenuringDistribution)
     RUN_CMD+=(-J-XX:+PrintGCApplicationStoppedTime -J-XX:+PrintPromotionFailure -J-XX:PrintFLSStatistics=1)
     RUN_CMD+=(-J-Xloggc:\${APP_LOGDIR}/gc.log -J-XX:+UseGCLogFileRotation -J-XX:NumberOfGCLogFiles=10 -J-XX:GCLogFileSize=10M)
-    RUN_CMD+=(-Dconfig.file=\$FINAL_APP_CONF -Dlogback.configurationFile=\$FINAL_APP_LOGBACK)
+    RUN_CMD+=(-Dspring.profiles.active=production -Dconfig.file=\$FINAL_APP_CONF -Dlogback.configurationFile=\$FINAL_APP_LOGBACK)
     RUN_CMD+=(\$JVM_EXTRA_OPS)
 
     echo "APP_MEM             : \$APP_MEM"

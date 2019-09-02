@@ -1,4 +1,7 @@
-package com.github.btnguyen2k.mus.samples.petstore;
+package com.github.btnguyen2k.mus.samples.petstore.bo;
+
+import com.github.ddth.commons.utils.SerializationUtils;
+import com.github.ddth.dao.BaseDataJsonFieldBo;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,30 +13,33 @@ import java.util.UUID;
  * @author Thanh Nguyen <btnguyen2k@gmail.com>
  * @since template-v2.0.r3
  */
-public class BaseModel {
+public class BaseBo extends BaseDataJsonFieldBo {
     private String id;
 
-    public BaseModel() {
+    public BaseBo() {
         this(null);
     }
 
-    public BaseModel(String id) {
+    public BaseBo(String id) {
         setId(id != null ? id : UUID.randomUUID().toString());
     }
 
     /*----------------------------------------------------------------------*/
 
     public Map<String, Object> toMap() {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", id);
-        return map;
+        Map<String, Object> result = SerializationUtils.fromJson(getDataAttrs(), Map.class);
+        if (result == null) {
+            result = new HashMap<>();
+        }
+        result.put("id", getId());
+        return result;
     }
 
     public String getId() {
         return id;
     }
 
-    public BaseModel setId(String id) {
+    public BaseBo setId(String id) {
         this.id = id != null ? id.trim().toLowerCase() : null;
         return this;
     }

@@ -17,12 +17,14 @@ APP_NOPROXY_HOST="\$NOPROXY_HOST"
 APP_PROXY_USER="\$PROXY_USER"
 APP_PROXY_PASSWORD="\$PROXY_PASSWORD"
 
+DEFAULT_APP_MIN_MEM=16
 DEFAULT_APP_MEM=64
-DEFAULT_APP_CONF=application.conf
-DEFAULT_APP_LOGBACK=logback-dev.xml
+DEFAULT_APP_CONF=./conf/application.conf
+DEFAULT_APP_LOGBACK=./conf/logback-dev.xml
 DEFAULT_APP_PID=\$APP_HOME/\$APP_NAME.pid
 DEFAULT_APP_LOGDIR=\$APP_HOME/logs
 
+APP_MIN_MEM=\$DEFAULT_APP_MIN_MEM
 APP_MEM=\$DEFAULT_APP_MEM
 APP_CONF=\$DEFAULT_APP_CONF
 APP_LOGBACK=\$DEFAULT_APP_LOGBACK
@@ -70,7 +72,7 @@ preStart() {
         if [[ \$APP_CONF =~ \$_startsWithSlash_ ]]; then
             FINAL_APP_CONF=\$APP_CONF
         else
-            FINAL_APP_CONF=\$APP_HOME/conf/\$APP_CONF
+            FINAL_APP_CONF=\$APP_HOME/\$APP_CONF
         fi
 
         if [ ! -f "\$FINAL_APP_CONF" ]; then
@@ -86,7 +88,7 @@ preStart() {
         if [[ \$APP_LOGBACK =~ \$_startsWithSlash_ ]]; then
             FINAL_APP_LOGBACK=\$APP_LOGBACK
         else
-            FINAL_APP_LOGBACK=\$APP_HOME/conf/\$APP_LOGBACK
+            FINAL_APP_LOGBACK=\$APP_HOME/\$APP_LOGBACK
         fi
 
         if [ ! -f "\$FINAL_APP_LOGBACK" ]; then

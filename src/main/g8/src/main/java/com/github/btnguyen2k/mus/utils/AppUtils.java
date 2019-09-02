@@ -2,7 +2,6 @@ package com.github.btnguyen2k.mus.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.ddth.commons.utils.DPathUtils;
-import com.github.ddth.commons.utils.MapUtils;
 import com.github.ddth.commons.utils.SerializationUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.*;
@@ -10,6 +9,7 @@ import com.github.ddth.recipes.apiservice.auth.AllowAllApiAuthenticator;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigResolveOptions;
+import io.swagger.v3.oas.annotations.Operation;
 import io.undertow.Undertow;
 import io.undertow.UndertowOptions;
 import io.undertow.io.Receiver;
@@ -17,13 +17,12 @@ import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.AttachmentKey;
 import io.undertow.util.Headers;
+import io.undertow.util.HttpString;
 import io.undertow.util.StatusCodes;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.config.BeanDefinition;
-import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
-import org.springframework.core.type.filter.AssignableTypeFilter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -47,13 +46,24 @@ public class AppUtils {
      * @since template-v2.0.r2
      */
     public static Config APP_CONFIG;
+    /**
+     * @since template-v2.0.r3
+     */
     public static String GLOBAL_KEY_APP_CONFIG = "APP_CONFIG";
 
     /**
      * @since template-v2.0.r3
      */
     public static ApiRouter API_ROUTER;
+    /**
+     * @since template-v2.0.r3
+     */
     public static String GLOBAL_KEY_API_ROUTER = "API_ROUTER";
+
+    /**
+     * @since template-v2.0.r3
+     */
+    public static String GLOBAL_KEY_SPRING_APP_CONTEXT = "SPRING_APP_CONTEXT";
 
     public final static int DEFAULT_MAX_REQUEST_SIZE = 64 * 1024;
     public final static int DEFAULT_REQUEST_TIMEOUT = 10000;
@@ -209,7 +219,8 @@ public class AppUtils {
                 } catch (Exception e) {
                     apiResult = new ApiResult(500, e.getMessage());
                 }
-                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
+                exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json")
+                        .put(new HttpString("Access-Control-Allow-Origin"), "*");
                 exchange.getResponseSender().send(apiResult.asJson().toString(), StandardCharsets.UTF_8);
             } else {
                 myDefaultHandler.handleRequest(exchange);
@@ -301,6 +312,26 @@ public class AppUtils {
         return config;
     }
 
+    private static Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> cachedAnnotatedHandlers;
+
+    private static Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> scanAnnotatedHandlers(
+            Config appConfig) {
+        if (cachedAnnotatedHandlers == null) {
+            List<String> scanPackages = TypesafeConfigUtils.getStringList(appConfig, "api.scan_packages");
+            if (scanPackages != null && scanPackages.size() > 0) {
+                cachedAnnotatedHandlers = ReflectionUtils.findApiHandlerAnnotatedWith(Operation.class,
+                        scanPackages.toArray(ArrayUtils.EMPTY_STRING_ARRAY));
+            } else {
+                cachedAnnotatedHandlers = new HashSet<>();
+            }
+        }
+        return cachedAnnotatedHandlers;
+    }
+
+    private static Map<String, ApiSpec> cachedApiSpecs = new HashMap<>();
+
+    private static ApiRouter cachedApiRouter = null;
+
     /**
      * Build {@link ApiRouter} from configurations.
      *
@@ -308,26 +339,54 @@ public class AppUtils {
      * @return
      */
     public static ApiRouter buildApiRouter(Config appConfig) {
-        ApiRouter apiRouter = new ApiRouter();
-        apiRouter.setApiAuthenticator(AllowAllApiAuthenticator.instance);
-        apiRouter.init();
+        if (cachedApiRouter == null) {
+            cachedApiRouter = new ApiRouter();
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> cachedApiRouter.destroy()));
+            cachedApiRouter.setApiAuthenticator(AllowAllApiAuthenticator.instance);
+            cachedApiRouter.init();
 
-        Map<String, Object> apiHandlerConfig = TypesafeConfigUtils.getObject(appConfig, "api.handlers", Map.class);
-        if (apiHandlerConfig != null) {
-            apiHandlerConfig.forEach((hName, hClazz) -> {
-                IApiHandler apiHandler = AppUtils.loadClassAndCreateObject(hClazz.toString(), IApiHandler.class);
-                if (apiHandler != null) {
-                    apiRouter.addApiHandler(hName, apiHandler);
-                    LOGGER.info("Registered class [" + hClazz + "] for API handler [" + hName + "].");
-                } else {
-                    LOGGER.warn("Cannot register API handler for [" + hName + "].");
+            //collect handlers from annotation
+            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(
+                    appConfig);
+            annotatedHandlers.forEach(entry -> {
+                Operation operation = entry.annotations.iterator().next();
+                ApiSpec apiSpec = ApiSpec.newInstance(operation);
+                String hName = apiSpec.getHandlerName();
+                if (!StringUtils.isBlank(hName)) {
+                    cachedApiSpecs.put(hName, apiSpec);
+                    IApiHandler existing = cachedApiRouter.getApiHandlers().get(hName);
+                    if (existing == null) {
+                        cachedApiRouter.addApiHandler(hName, entry.apiHandler);
+                        LOGGER.info("Registered API handler [" + hName + ":" + entry.apiHandler.getClass().getName()
+                                + "] from annotation.");
+                    } else {
+                        LOGGER.warn(
+                                "API handler [" + hName + "] has already registered to class [" + existing.getClass()
+                                        .getName() + "], cannot register to class [" + entry.apiHandler.getClass()
+                                        .getName() + "] from annotation.");
+                    }
                 }
             });
+
+            //collect handlers from application configurations
+            Map<String, Object> apiHandlerConfig = TypesafeConfigUtils.getObject(appConfig, "api.handlers", Map.class);
+            if (apiHandlerConfig != null) {
+                apiHandlerConfig.forEach((hName, hClazz) -> {
+                    IApiHandler apiHandler = AppUtils.loadClassAndCreateObject(hClazz.toString(), IApiHandler.class);
+                    if (apiHandler != null) {
+                        cachedApiRouter.addApiHandler(hName, apiHandler);
+                        LOGGER.info("Registered API handler [" + hName + ":" + hClazz + "] from app-config.");
+                    } else {
+                        LOGGER.warn("Cannot register API handler for [" + hName + ":" + hClazz + "].");
+                    }
+                });
+            }
         }
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> apiRouter.destroy()));
-        return apiRouter;
+        return cachedApiRouter;
     }
+
+    private static Map<String, Map<String, ApiSpec>> cachedEnpoints;
 
     /**
      * @param appConfig
@@ -335,47 +394,65 @@ public class AppUtils {
      * @since template-v2.0.r3
      */
     public static Map<String, Map<String, ApiSpec>> buildEndpoints(Config appConfig) {
-        Map<String, Map<String, ApiSpec>> endpoints = new TreeMap<>();
+        if (cachedEnpoints == null) {
+            cachedEnpoints = new TreeMap<>();
 
-        //first, build endpoints from application configurations
-        Map<?, ?> apiEndpoints = TypesafeConfigUtils.getObject(appConfig, "api.endpoints", Map.class);
-        if (apiEndpoints != null) {
-            apiEndpoints.forEach((uriTemplate, _handlerConfig) -> {
-                if (!(_handlerConfig instanceof Map)) {
-                    LOGGER.warn(
-                            "Invalid handler configurations. Expecting a map, but received " + _handlerConfig.getClass()
-                                    + " / " + _handlerConfig);
-                } else {
-                    Map<String, String> myHandlerConfigMap = new HashMap<>();
-                    ((Map<?, ?>) _handlerConfig)
-                            .forEach((k, v) -> myHandlerConfigMap.put(k.toString().toUpperCase(), v.toString()));
-                    String catchAllHandlerName = myHandlerConfigMap.get("*");
-                    if (!StringUtils.isBlank(catchAllHandlerName)) {
-                        //default is GET
-                        endpoints.put(uriTemplate.toString(),
-                                MapUtils.createMap("get", new ApiSpec(catchAllHandlerName)));
-                    } else {
-                        Map<String, ApiSpec> handlerMappings = new TreeMap<>();
-                        myHandlerConfigMap
-                                .forEach((method, handler) -> handlerMappings.put(method, new ApiSpec(handler)));
-                        endpoints.put(uriTemplate.toString(), handlerMappings);
+            //build endpoints from annotation
+            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(
+                    appConfig);
+            annotatedHandlers.forEach(entry -> {
+                Operation operation = entry.annotations.iterator().next();
+                ApiSpec apiSpec = ApiSpec.newInstance(operation);
+                String hName = apiSpec.getHandlerName();
+                if (!StringUtils.isBlank(hName)) {
+                    cachedApiSpecs.put(hName, apiSpec);
+                    //method and uri are encoded in Operation.method with format <method>:<uri>
+                    String[] tokens = operation.method().split(":");
+                    if (tokens != null && tokens.length > 1) {
+                        String method = tokens[0];
+                        String uri = tokens[1];
+                        Map<String, ApiSpec> handlerMappings = cachedEnpoints.getOrDefault(uri, new TreeMap<>());
+                        cachedEnpoints.put(uri, handlerMappings);
+                        handlerMappings.put(method, apiSpec);
+                        LOGGER.info("Endpoint [" + tokens[0] + "]" + tokens[1] + " from annotation.");
                     }
                 }
             });
-        }
 
-        //second, build endpoints from class annotations
-        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
-        scanner.addIncludeFilter(new AssignableTypeFilter(IApiHandler.class));
-        List<String> scanPackages = TypesafeConfigUtils.getStringList(appConfig, "api.scan_packages");
-        if (scanPackages != null && scanPackages.size() > 0) {
-            for (String scanPackage : scanPackages) {
-                for (BeanDefinition bd : scanner.findCandidateComponents(scanPackage)) {
-                    System.out.println(bd.getBeanClassName());
-                }
+            //build endpoints from application configurations
+            Map<?, ?> apiEndpoints = TypesafeConfigUtils.getObject(appConfig, "api.endpoints", Map.class);
+            if (apiEndpoints != null) {
+                apiEndpoints.forEach((uriTemplate, _handlerConfig) -> {
+                    if (!(_handlerConfig instanceof Map)) {
+                        LOGGER.warn("Invalid handler configurations. Expecting a map, but received " + _handlerConfig
+                                .getClass() + " / " + _handlerConfig);
+                    } else {
+                        Map<String, String> myHandlerConfigMap = new HashMap<>();
+                        ((Map<?, ?>) _handlerConfig)
+                                .forEach((k, v) -> myHandlerConfigMap.put(k.toString().toUpperCase(), v.toString()));
+                        String catchAllHandlerName = myHandlerConfigMap.get("*");
+                        if (!StringUtils.isBlank(catchAllHandlerName)) {
+                            Map<String, ApiSpec> handlerMappings = cachedEnpoints
+                                    .getOrDefault(uriTemplate.toString(), new TreeMap<>());
+                            cachedEnpoints.put(uriTemplate.toString(), handlerMappings);
+                            //default is GET
+                            handlerMappings.put("GET",
+                                    cachedApiSpecs.getOrDefault(catchAllHandlerName, new ApiSpec(catchAllHandlerName)));
+                            LOGGER.info("Endpoint [GET]" + uriTemplate + " from app-config.");
+                        } else {
+                            Map<String, ApiSpec> handlerMappings = cachedEnpoints
+                                    .getOrDefault(uriTemplate.toString(), new TreeMap<>());
+                            cachedEnpoints.put(uriTemplate.toString(), handlerMappings);
+                            myHandlerConfigMap.forEach((method, handlerName) -> handlerMappings
+                                    .put(method, cachedApiSpecs.getOrDefault(handlerName, new ApiSpec(handlerName))));
+                            LOGGER.info("Endpoint " + handlerMappings.keySet() + uriTemplate.toString()
+                                    + " from app-config.");
+                        }
+                    }
+                });
             }
         }
 
-        return endpoints;
+        return cachedEnpoints;
     }
 }
