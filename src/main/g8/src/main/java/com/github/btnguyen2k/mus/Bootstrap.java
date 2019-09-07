@@ -2,8 +2,8 @@ package com.github.btnguyen2k.mus;
 
 import com.github.btnguyen2k.mus.utils.ApiSpec;
 import com.github.btnguyen2k.mus.utils.AppUtils;
-import com.github.btnguyen2k.mus.utils.SwaggerJsonHttpHandler;
-import com.github.btnguyen2k.mus.utils.WebJarAssetsHttpHandler;
+import com.github.btnguyen2k.mus.utils.httphandlers.SwaggerJsonHttpHandler;
+import com.github.btnguyen2k.mus.utils.httphandlers.WebJarAssetsHttpHandler;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.ApiResult;
 import com.github.ddth.recipes.apiservice.ApiRouter;
@@ -94,7 +94,7 @@ public class Bootstrap {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         /*
          * Load configuration file, default location "conf/application.conf".
          * System's property "config.file" can override the location value.

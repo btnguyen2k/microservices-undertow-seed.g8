@@ -77,12 +77,13 @@ EclipseKeys.projectFlavor            := EclipseProjectFlavor.Java               
 
 /* Dependencies */
 val _slf4jVersion       = "1.7.28"
-val _undertowVersion    = "2.0.25.Final"
+val _undertowVersion    = "2.0.26.Final"
 val _jacksonVersion     = "2.9.9"
 val _springVersion      = "5.1.9.RELEASE"
 val _ddthCommonsVersion = "1.1.0"
 val _ddthDao            = "1.1.1"
-val _ddthRecipesVersion = "1.0.0"
+val _ddthQueue          = "1.0.0"
+val _ddthRecipesVersion = "1.1.0"
 
 libraryDependencies ++= Seq(
     "org.slf4j"                     % "slf4j-api"                     % _slf4jVersion
@@ -113,9 +114,13 @@ libraryDependencies ++= Seq(
    ,"com.github.ddth"               % "ddth-commons-core"             % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-serialization"    % _ddthCommonsVersion
    ,"com.github.ddth"               % "ddth-commons-typesafeconfig"   % _ddthCommonsVersion
-   ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
    ,"com.github.ddth"               % "ddth-dao-core"                 % _ddthDao
    ,"com.github.ddth"               % "ddth-dao-jdbc"                 % _ddthDao
+   ,"com.github.ddth"               % "ddth-queue-core"               % _ddthQueue
+   ,"com.github.ddth"               % "ddth-queue-rocksdb"            % _ddthQueue
+
+   ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
+   ,"org.influxdb"                  % "influxdb-java"                 % "2.15"
 
    ,"org.webjars"                   % "webjars-locator-core"          % "0.40"
    ,"org.webjars"                   % "swagger-ui"                    % "3.23.5"

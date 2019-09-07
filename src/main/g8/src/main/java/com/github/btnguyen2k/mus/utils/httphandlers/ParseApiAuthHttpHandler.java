@@ -1,5 +1,6 @@
-package com.github.btnguyen2k.mus.utils;
+package com.github.btnguyen2k.mus.utils.httphandlers;
 
+import com.github.btnguyen2k.mus.utils.AppUtils;
 import com.github.ddth.recipes.apiservice.ApiAuth;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;

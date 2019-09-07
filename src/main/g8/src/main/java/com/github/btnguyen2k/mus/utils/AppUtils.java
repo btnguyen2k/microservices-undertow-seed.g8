@@ -1,11 +1,14 @@
 package com.github.btnguyen2k.mus.utils;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.github.btnguyen2k.mus.utils.httphandlers.ParseApiAuthHttpHandler;
+import com.github.btnguyen2k.mus.utils.perflogs.InfluxdbPerfLogger;
 import com.github.ddth.commons.utils.DPathUtils;
 import com.github.ddth.commons.utils.SerializationUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.recipes.apiservice.*;
-import com.github.ddth.recipes.apiservice.auth.AllowAllApiAuthenticator;
+import com.github.ddth.recipes.apiservice.filters.LoggingFilter;
+import com.github.ddth.recipes.apiservice.logging.PrintStreamPerfApiLogger;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import com.typesafe.config.ConfigResolveOptions;
@@ -332,17 +335,46 @@ public class AppUtils {
 
     private static ApiRouter cachedApiRouter = null;
 
+    private static IApiLogger buildPerfLogger(Config config) throws Exception {
+        String destination = TypesafeConfigUtils.getStringOptional(config, "api.perf_log.destination").orElse("");
+        if (destination.equalsIgnoreCase("console")) {
+            return PrintStreamPerfApiLogger.STDOUT_LOGGER;
+        }
+        if (destination.equalsIgnoreCase("influx") || destination.equalsIgnoreCase("influxdb")) {
+            String server = TypesafeConfigUtils.getString(config, "api.perf_log.influxdb.server");
+            if (StringUtils.isBlank(server)) {
+                throw new RuntimeException("Performance log destination is [" + destination
+                        + "], but no InfluxDB server configured at key [api.perf_log.influxdb.server].");
+            }
+            String database = TypesafeConfigUtils.getString(config, "api.perf_log.influxdb.database");
+            if (StringUtils.isBlank(database)) {
+                throw new RuntimeException("Performance log destination is [" + destination
+                        + "], but no InfluxDB database configured at key [api.perf_log.influxdb.database].");
+            }
+            InfluxdbPerfLogger apiLogger = new InfluxdbPerfLogger(config.getConfig("api.perf_log"));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> apiLogger.destroy()));
+            apiLogger.init();
+            return apiLogger;
+        }
+        return null;
+    }
+
     /**
      * Build {@link ApiRouter} from configurations.
      *
      * @param appConfig
      * @return
      */
-    public static ApiRouter buildApiRouter(Config appConfig) {
+    public static ApiRouter buildApiRouter(Config appConfig) throws Exception {
         if (cachedApiRouter == null) {
             cachedApiRouter = new ApiRouter();
             Runtime.getRuntime().addShutdownHook(new Thread(() -> cachedApiRouter.destroy()));
-            cachedApiRouter.setApiAuthenticator(AllowAllApiAuthenticator.instance);
+            {
+                IApiLogger perfLogger = buildPerfLogger(appConfig);
+                if (perfLogger != null) {
+                    cachedApiRouter.setApiFilter(new LoggingFilter(cachedApiRouter, perfLogger));
+                }
+            }
             cachedApiRouter.init();
 
             //collect handlers from annotation
@@ -398,7 +430,8 @@ public class AppUtils {
             cachedEnpoints = new TreeMap<>();
 
             //build endpoints from annotation
-            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(appConfig);
+            Collection<ReflectionUtils.ApiHandlerWithAnnotations<Operation>> annotatedHandlers = scanAnnotatedHandlers(
+                    appConfig);
             annotatedHandlers.forEach(entry -> {
                 Operation operation = entry.annotations.iterator().next();
                 ApiSpec apiSpec = ApiSpec.newInstance(operation);
