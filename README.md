@@ -8,7 +8,7 @@ To create a new project from template:
 sbt new btnguyen2k/microservices-undertow-seed.g8
 ```
 
-Latest release: [template-v2.0.r3](RELEASE-NOTES.md).
+Latest release: [template-v2.0.r4](RELEASE-NOTES.md).
 
 ## Features
 
@@ -26,6 +26,8 @@ Latest release: [template-v2.0.r3](RELEASE-NOTES.md).
 - [Custom additional bootstrapping routines](#additional-bootstrapping-routines).
 - WebJars support:
   - WebJar assets are accessed via `/webjar/{bundle}/*`
+- API logging (since [template-v2.0.r4](RELEASE-NOTES.md))
+
 
 ## Configurations
 

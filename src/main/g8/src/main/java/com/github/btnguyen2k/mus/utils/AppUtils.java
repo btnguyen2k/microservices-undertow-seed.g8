@@ -3,10 +3,16 @@ package com.github.btnguyen2k.mus.utils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.btnguyen2k.mus.utils.httphandlers.ParseApiAuthHttpHandler;
 import com.github.btnguyen2k.mus.utils.perflogs.InfluxdbPerfLogger;
+import com.github.btnguyen2k.mus.utils.requestlogs.EsRequestApiLogger;
+import com.github.btnguyen2k.mus.utils.requestlogs.PrintStreamRequestApiLogger;
 import com.github.ddth.commons.utils.DPathUtils;
 import com.github.ddth.commons.utils.SerializationUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
+import com.github.ddth.queue.IQueue;
+import com.github.ddth.queue.IQueueMessage;
+import com.github.ddth.queue.impl.AbstractQueue;
 import com.github.ddth.recipes.apiservice.*;
+import com.github.ddth.recipes.apiservice.filters.AddPerfInfoFilter;
 import com.github.ddth.recipes.apiservice.filters.LoggingFilter;
 import com.github.ddth.recipes.apiservice.logging.PrintStreamPerfApiLogger;
 import com.typesafe.config.Config;
@@ -28,10 +34,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Application's utility class.
@@ -209,7 +217,9 @@ public class AppUtils {
                     myHandlerConfigMap.get(exchange.getRequestMethod().toString().toUpperCase());
             if (handlerName != null) {
                 ApiResult apiResult;
-                ApiContext context = ApiContext.newContext("HTTP", handlerName);
+                ApiContext context = ApiContext.newContext("HTTP", handlerName).setId(IdUtils.nextId());
+                context.setContextField("method", exchange.getRequestMethod().toString());
+                context.setContextField("url", exchange.getRequestURL());
                 ApiAuth auth = exchange.getAttachment(ATTKEY_API_AUTH);
                 try {
                     apiResult = apiRouter
@@ -243,11 +253,11 @@ public class AppUtils {
      * @return
      */
     public static Undertow.Builder buildUndertowServer(Config appConfig) {
-        int httpPort = ConfigUtils.getConfigAsInt(appConfig, "api.http.port", 0);
+        int httpPort = TypesafeConfigUtils.getIntegerOptional(appConfig, "api.http.port").orElse(0);
         if (httpPort <= 0) {
             return null;
         }
-        String httpBind = ConfigUtils.getConfigAsString(appConfig, "api.http.address");
+        String httpBind = TypesafeConfigUtils.getString(appConfig, "api.http.address");
         httpBind = httpBind != null ? httpBind : "localhost";
         Undertow.Builder builder = Undertow.builder().setServerOption(UndertowOptions.ENABLE_HTTP2, true);
         {
@@ -359,6 +369,30 @@ public class AppUtils {
         return null;
     }
 
+    private static IApiLogger builApiLogger(Config config) throws Exception {
+        String destination = TypesafeConfigUtils.getStringOptional(config, "api.request_log.destination").orElse("");
+        if (destination.equalsIgnoreCase("console")) {
+            return new PrintStreamRequestApiLogger(config).setPrintStream(System.out);
+        }
+        if (destination.equalsIgnoreCase("es") || destination.equalsIgnoreCase("elasticsearch")) {
+            String server = TypesafeConfigUtils.getString(config, "api.request_log.elasticsearch.server");
+            if (StringUtils.isBlank(server)) {
+                throw new RuntimeException("API log destination is [" + destination
+                        + "], but no ES server configured at key [api.request_log.elasticsearch.server].");
+            }
+            String index = TypesafeConfigUtils.getString(config, "api.request_log.elasticsearch.index");
+            if (StringUtils.isBlank(index)) {
+                throw new RuntimeException("API log destination is [" + destination
+                        + "], but no ES index configured at key [api.request_log.elasticsearch.index].");
+            }
+            EsRequestApiLogger apiLogger = new EsRequestApiLogger(config.getConfig("api.request_log"));
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> apiLogger.destroy()));
+            apiLogger.init();
+            return apiLogger;
+        }
+        return null;
+    }
+
     /**
      * Build {@link ApiRouter} from configurations.
      *
@@ -369,12 +403,23 @@ public class AppUtils {
         if (cachedApiRouter == null) {
             cachedApiRouter = new ApiRouter();
             Runtime.getRuntime().addShutdownHook(new Thread(() -> cachedApiRouter.destroy()));
+            ApiFilter apiFilter = new AddPerfInfoFilter(cachedApiRouter);
             {
+                //API performance log
                 IApiLogger perfLogger = buildPerfLogger(appConfig);
                 if (perfLogger != null) {
-                    cachedApiRouter.setApiFilter(new LoggingFilter(cachedApiRouter, perfLogger));
+                    apiFilter = new LoggingFilter(cachedApiRouter, apiFilter, perfLogger);
                 }
             }
+            {
+                //API request/response log
+                IApiLogger apiLogger = builApiLogger(appConfig);
+                if (apiLogger != null) {
+                    apiFilter = new LoggingFilter(cachedApiRouter, apiFilter, apiLogger);
+                }
+            }
+            cachedApiRouter.setApiFilter(apiFilter);
+            cachedApiRouter.setAddPerfInfoToResult(false);
             cachedApiRouter.init();
 
             //collect handlers from annotation
@@ -486,5 +531,92 @@ public class AppUtils {
         }
 
         return cachedEnpoints;
+    }
+
+    /**
+     * @param obj
+     * @param canClose
+     * @since template-v2.0.r4
+     */
+    public static void close(Closeable obj, boolean canClose) {
+        if (obj != null && canClose) {
+            try {
+                obj.close();
+            } catch (Exception e) {
+                LOGGER.warn(e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * @param obj
+     * @param canClose
+     * @since template-v2.0.r4
+     */
+    public static void close(AutoCloseable obj, boolean canClose) {
+        if (obj != null && canClose) {
+            try {
+                obj.close();
+            } catch (Exception e) {
+                LOGGER.warn(e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * @param es
+     * @param canClose
+     * @since template-v2.0.r4
+     */
+    public static void close(ExecutorService es, boolean canClose) {
+        if (es != null && canClose) {
+            try {
+                es.shutdown();
+            } catch (Exception e) {
+                LOGGER.warn(e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * @param queue
+     * @param canClose
+     * @since template-v2.0.r4
+     */
+    public static void close(IQueue<?, ?> queue, boolean canClose) {
+        if (queue instanceof AbstractQueue && canClose) {
+            try {
+                ((AbstractQueue<?, ?>) queue).destroy();
+            } catch (Exception e) {
+                LOGGER.warn(e.getMessage(), e);
+            }
+        }
+    }
+
+    /**
+     * @param queue
+     * @param data
+     * @return
+     * @since template-v2.0.r4
+     */
+    public static boolean write(IQueue<Long, byte[]> queue, Object data) {
+        String json = SerializationUtils.toJsonString(data);
+        IQueueMessage<Long, byte[]> queueMsg = queue.createMessage(json.getBytes(StandardCharsets.UTF_8));
+        return queue.queue(queueMsg);
+    }
+
+    /**
+     * @param queue
+     * @return
+     * @since template-v2.0.r4
+     */
+    public static Map<String, Object> takeFromQueue(IQueue<Long, byte[]> queue) {
+        IQueueMessage<Long, byte[]> queueMsg = queue.take();
+        if (queueMsg != null) {
+            queue.finish(queueMsg);
+            String json = new String(queueMsg.getData(), StandardCharsets.UTF_8);
+            return SerializationUtils.fromJsonString(json, Map.class);
+        }
+        return null;
     }
 }

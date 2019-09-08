@@ -119,6 +119,7 @@ libraryDependencies ++= Seq(
 
    ,"com.github.ddth"               % "ddth-recipes"                  % _ddthRecipesVersion
    ,"org.influxdb"                  % "influxdb-java"                 % "2.15"
+   ,"org.elasticsearch.client"      % "elasticsearch-rest-high-level-client" % "7.3.1"
 
    ,"org.webjars"                   % "webjars-locator-core"          % "0.40"
    ,"org.webjars"                   % "swagger-ui"                    % "3.23.5"

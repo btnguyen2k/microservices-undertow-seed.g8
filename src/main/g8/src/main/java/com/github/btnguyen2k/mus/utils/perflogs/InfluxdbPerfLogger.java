@@ -1,19 +1,14 @@
 package com.github.btnguyen2k.mus.utils.perflogs;
 
 import com.github.btnguyen2k.mus.utils.AppUtils;
+import com.github.btnguyen2k.mus.utils.BufferUtils;
 import com.github.ddth.commons.utils.DPathUtils;
-import com.github.ddth.commons.utils.SerializationUtils;
 import com.github.ddth.commons.utils.TypesafeConfigUtils;
 import com.github.ddth.queue.IQueue;
-import com.github.ddth.queue.IQueueMessage;
-import com.github.ddth.queue.impl.AbstractQueue;
-import com.github.ddth.queue.impl.universal.idint.UniversalInmemQueue;
-import com.github.ddth.queue.impl.universal.idint.UniversalRocksDbQueue;
 import com.github.ddth.queue.utils.QueueException;
 import com.github.ddth.recipes.apiservice.logging.AbstractPerfApiLogger;
 import com.typesafe.config.Config;
 import okhttp3.OkHttpClient;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.influxdb.BatchOptions;
 import org.influxdb.InfluxDB;
@@ -24,11 +19,8 @@ import org.influxdb.dto.QueryResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -70,43 +62,6 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
         }
     }
 
-    private IQueue<Long, byte[]> tryCreateFileBuffer() throws Exception {
-        String bufferType = TypesafeConfigUtils.getStringOptional(config, "buffer.type").orElse("memory");
-        if (bufferType.equalsIgnoreCase("file")) {
-            String directory = TypesafeConfigUtils.getString(config, "buffer.directory");
-            if (StringUtils.isBlank(directory)) {
-                LOGGER.warn("PerfLog buffer type is [file] but directory is not configured at key [buffer.directory].");
-                return null;
-            }
-            Random rand = new Random(System.currentTimeMillis());
-            directory = StringUtils.replace(directory, "#{random}", String.valueOf(rand.nextInt(Integer.MAX_VALUE)));
-            File dir = new File(directory);
-            dir.mkdirs();
-            if (!dir.isDirectory() || !dir.canWrite()) {
-                LOGGER.warn("Directory [" + dir.getAbsolutePath() + "] is not valid or not writable.");
-                return null;
-            }
-            Runtime.getRuntime().addShutdownHook(new Thread(() -> FileUtils.deleteQuietly(dir)));
-            AbstractQueue<Long, byte[]> queue = new UniversalRocksDbQueue().setStorageDir(dir.getAbsolutePath())
-                    .setQueueName(this.getClass().getSimpleName() + "-" + System.currentTimeMillis());
-            queue.init();
-            LOGGER.info("Created PerfLog file-buffer [" + queue.getQueueName() + "] at " + dir.getAbsolutePath());
-            return queue;
-        }
-        return null;
-    }
-
-    private IQueue<Long, byte[]> createMemoryBuffer() throws Exception {
-        int queueBoundary = TypesafeConfigUtils.getIntegerOptional(config, "buffer.max_items")
-                .orElse(DEFAULT_MAX_QUEUE_ITEMS);
-        //default is memory buffer
-        AbstractQueue<Long, byte[]> queue = new UniversalInmemQueue(queueBoundary)
-                .setQueueName(this.getClass().getSimpleName() + "-" + System.currentTimeMillis());
-        queue.init();
-        LOGGER.info("Created PerfLog memory-buffer [" + queue.getQueueName() + "] with capacity " + queueBoundary);
-        return queue;
-    }
-
     public InfluxdbPerfLogger init() throws Exception {
         appName = TypesafeConfigUtils.getString(AppUtils.APP_CONFIG, "app.name");
         appVersion = TypesafeConfigUtils.getString(AppUtils.APP_CONFIG, "app.version");
@@ -123,16 +78,16 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
                 .readTimeout(5, TimeUnit.SECONDS).writeTimeout(7, TimeUnit.SECONDS);
         BatchOptions batchOptions = BatchOptions.DEFAULTS.actions(10).bufferLimit(1024)
                 .exceptionHandler((failedPoints, t) -> LOGGER.error(t.getMessage(), t));
-        if (StringUtils.isBlank(user)) {
+        if (!StringUtils.isBlank(user)) {
             influxdb = InfluxDBFactory.connect(server, user, password, okHttpClientBuilder).enableGzip()
                     .enableBatch(batchOptions);
         } else {
             influxdb = InfluxDBFactory.connect(server, okHttpClientBuilder).enableGzip().enableBatch(batchOptions);
         }
 
-        queue = tryCreateFileBuffer();
+        queue = BufferUtils.tryCreateFileBuffer(config);
         if (queue == null) {
-            queue = createMemoryBuffer();
+            queue = BufferUtils.createMemoryBuffer(config, DEFAULT_MAX_QUEUE_ITEMS);
         }
 
         executorService.schedule(() -> loopSendLogs(), 1, TimeUnit.SECONDS);
@@ -140,37 +95,14 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
     }
 
     public void destroy() {
-        if (executorService != null && myOwnExecutorService) {
-            try {
-                executorService.shutdown();
-            } catch (Exception e) {
-                LOGGER.error(e.getMessage(), e);
-            } finally {
-                executorService = null;
-            }
-        }
+        AppUtils.close(executorService, myOwnExecutorService);
+        executorService = null;
 
-        if (queue != null) {
-            try {
-                if (queue instanceof AbstractQueue) {
-                    ((AbstractQueue<?, byte[]>) queue).destroy();
-                }
-            } catch (Exception e) {
-                LOGGER.error(e.getMessage(), e);
-            } finally {
-                queue = null;
-            }
-        }
+        AppUtils.close(queue, true);
+        queue = null;
 
-        if (influxdb != null) {
-            try {
-                influxdb.close();
-            } catch (Exception e) {
-                LOGGER.error(e.getMessage(), e);
-            } finally {
-                influxdb = null;
-            }
-        }
+        AppUtils.close(influxdb, true);
+        influxdb = null;
     }
 
     private void initLogger() {
@@ -208,17 +140,8 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
             LOGGER.info("Using default retention policy.");
         }
 
+        LOGGER.info("API logger " + InfluxdbPerfLogger.class.getName() + " initialized.");
         inited = true;
-    }
-
-    private Map<String, Object> takeFromQueue() {
-        IQueueMessage<Long, byte[]> queueMsg = queue.take();
-        if (queueMsg != null) {
-            queue.finish(queueMsg);
-            String json = new String(queueMsg.getData(), StandardCharsets.UTF_8);
-            return SerializationUtils.fromJsonString(json, Map.class);
-        }
-        return null;
     }
 
     private void loopSendLogs() {
@@ -237,7 +160,7 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
         int counter = 0;
         while (true && queue != null && influxdb != null && counter < 100) {
             try {
-                Map<String, Object> data = takeFromQueue();
+                Map<String, Object> data = AppUtils.takeFromQueue(queue);
                 if (data != null) {
                     counter++;
                     String appName = DPathUtils.getValueOptional(data, "app_name", String.class).orElse("");
@@ -278,10 +201,8 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
         Map<String, Object> myData = new HashMap<>(data);
         myData.put("app_name", appName);
         myData.put("app_version", appVersion);
-        String json = SerializationUtils.toJsonString(myData);
-        IQueueMessage<Long, byte[]> queueMsg = queue.createMessage(json.getBytes(StandardCharsets.UTF_8));
         try {
-            if (!queue.queue(queueMsg)) {
+            if (!AppUtils.write(queue, myData)) {
                 LOGGER.error("Cannot queue log entry.");
             }
         } catch (QueueException.QueueIsFull e) {

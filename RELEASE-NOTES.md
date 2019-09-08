@@ -1,5 +1,15 @@
 # microservices-undertow-seed.g8 Release Notes
 
+## 2019-09-08: template-v2.0.r4
+
+- API performance log:
+  - Log to console
+  - Log to InfluxDB
+- API request log:
+  - Log to console
+  - Log to ElasticSearch
+
+
 ## 2019-09-01: template-v2.0.r3
 
 - Undertow `2.0.25.Final`
