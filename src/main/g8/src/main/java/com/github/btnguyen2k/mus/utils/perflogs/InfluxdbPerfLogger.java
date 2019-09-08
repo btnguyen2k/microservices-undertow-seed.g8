@@ -8,10 +8,12 @@ import com.github.ddth.queue.IQueue;
 import com.github.ddth.queue.IQueueMessage;
 import com.github.ddth.queue.impl.AbstractQueue;
 import com.github.ddth.queue.impl.universal.idint.UniversalInmemQueue;
+import com.github.ddth.queue.impl.universal.idint.UniversalRocksDbQueue;
 import com.github.ddth.queue.utils.QueueException;
 import com.github.ddth.recipes.apiservice.logging.AbstractPerfApiLogger;
 import com.typesafe.config.Config;
 import okhttp3.OkHttpClient;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.influxdb.BatchOptions;
 import org.influxdb.InfluxDB;
@@ -22,9 +24,11 @@ import org.influxdb.dto.QueryResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -37,7 +41,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
     private final static long DEFAULT_RETENTION = 7 * 24 * 3600 * 1000; //7 days
-    private final static int DEFAULT_MAX_QUEUE_ITEMS = 1024 * 1024;
+    private final static int DEFAULT_MAX_QUEUE_ITEMS = 64 * 1024; //64k items
 
     private Logger LOGGER = LoggerFactory.getLogger(InfluxdbPerfLogger.class);
 
@@ -66,6 +70,43 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
         }
     }
 
+    private IQueue<Long, byte[]> tryCreateFileBuffer() throws Exception {
+        String bufferType = TypesafeConfigUtils.getStringOptional(config, "buffer.type").orElse("memory");
+        if (bufferType.equalsIgnoreCase("file")) {
+            String directory = TypesafeConfigUtils.getString(config, "buffer.directory");
+            if (StringUtils.isBlank(directory)) {
+                LOGGER.warn("PerfLog buffer type is [file] but directory is not configured at key [buffer.directory].");
+                return null;
+            }
+            Random rand = new Random(System.currentTimeMillis());
+            directory = StringUtils.replace(directory, "#{random}", String.valueOf(rand.nextInt(Integer.MAX_VALUE)));
+            File dir = new File(directory);
+            dir.mkdirs();
+            if (!dir.isDirectory() || !dir.canWrite()) {
+                LOGGER.warn("Directory [" + dir.getAbsolutePath() + "] is not valid or not writable.");
+                return null;
+            }
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> FileUtils.deleteQuietly(dir)));
+            AbstractQueue<Long, byte[]> queue = new UniversalRocksDbQueue().setStorageDir(dir.getAbsolutePath())
+                    .setQueueName(this.getClass().getSimpleName() + "-" + System.currentTimeMillis());
+            queue.init();
+            LOGGER.info("Created PerfLog file-buffer [" + queue.getQueueName() + "] at " + dir.getAbsolutePath());
+            return queue;
+        }
+        return null;
+    }
+
+    private IQueue<Long, byte[]> createMemoryBuffer() throws Exception {
+        int queueBoundary = TypesafeConfigUtils.getIntegerOptional(config, "buffer.max_items")
+                .orElse(DEFAULT_MAX_QUEUE_ITEMS);
+        //default is memory buffer
+        AbstractQueue<Long, byte[]> queue = new UniversalInmemQueue(queueBoundary)
+                .setQueueName(this.getClass().getSimpleName() + "-" + System.currentTimeMillis());
+        queue.init();
+        LOGGER.info("Created PerfLog memory-buffer [" + queue.getQueueName() + "] with capacity " + queueBoundary);
+        return queue;
+    }
+
     public InfluxdbPerfLogger init() throws Exception {
         appName = TypesafeConfigUtils.getString(AppUtils.APP_CONFIG, "app.name");
         appVersion = TypesafeConfigUtils.getString(AppUtils.APP_CONFIG, "app.version");
@@ -89,17 +130,9 @@ public class InfluxdbPerfLogger extends AbstractPerfApiLogger {
             influxdb = InfluxDBFactory.connect(server, okHttpClientBuilder).enableGzip().enableBatch(batchOptions);
         }
 
-        String bufferType = TypesafeConfigUtils.getStringOptional(config, "buffer.type").orElse("memory");
-        int queueBoundary = TypesafeConfigUtils.getIntegerOptional(config, "buffer.max_items")
-                .orElse(DEFAULT_MAX_QUEUE_ITEMS);
-        if (bufferType.equalsIgnoreCase("file")) {
-
-        } else {
-            //default is memory buffer
-            AbstractQueue<Long, byte[]> queue = new UniversalInmemQueue(queueBoundary)
-                    .setQueueName(this.getClass().getSimpleName() + "-" + System.currentTimeMillis());
-            queue.init();
-            this.queue = queue;
+        queue = tryCreateFileBuffer();
+        if (queue == null) {
+            queue = createMemoryBuffer();
         }
 
         executorService.schedule(() -> loopSendLogs(), 1, TimeUnit.SECONDS);
