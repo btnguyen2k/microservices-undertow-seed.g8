@@ -42,7 +42,7 @@ doStart() {
         RUN_CMD+=(-Dhttp.nonProxyHosts=\$APP_NOPROXY_HOST)
     fi
     RUN_CMD+=(-Djava.awt.headless=true -Djava.net.preferIPv4Stack=true -J-server -J-Xms\${APP_MEM}m -J-Xmx\${APP_MEM}m)
-    RUN_CMD+=(-J-XX:+UseThreadPriorities -J-XX:ThreadPriorityPolicy=42 -J-XX:+HeapDumpOnOutOfMemoryError -J-Xss256k)
+    RUN_CMD+=(-J-XX:+UseThreadPriorities -J-XX:+HeapDumpOnOutOfMemoryError -J-Xss256k)
     RUN_CMD+=(-J-XX:+UseTLAB -J-XX:+ResizeTLAB -J-XX:+UseNUMA -J-XX:+PerfDisableSharedMem)
     RUN_CMD+=(-J-XX:+UseSerialGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100)
     #RUN_CMD+=(-J-XX:+PrintGCDetails -J-XX:+PrintGCDateStamps -J-XX:+PrintHeapAtGC -J-XX:+PrintTenuringDistribution)
