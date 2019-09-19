@@ -39,9 +39,10 @@ dockerCommands := Seq(
   Cmd("RUN"           , "cp /usr/share/zoneinfo/Asia/Ho_Chi_Minh /etc/localtime"),
   Cmd("WORKDIR"       , "/opt/" + appName),
   Cmd("USER"          , "daemon"),
+  Cmd("EXPOSE"        , conf.getString("api.http.port")),
   ExecCmd("ENTRYPOINT", "./bin/" + appName)
 )
-dockerExposedPorts ++= Seq(conf.getInt("api.http.port"))
+dockerExposedPorts    := Seq(conf.getInt("api.http.port"))
 packageName in Docker := appName
 version in Docker     := appVersion
 
