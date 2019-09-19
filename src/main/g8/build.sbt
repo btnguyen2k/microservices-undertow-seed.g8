@@ -39,6 +39,7 @@ dockerCommands := Seq(
   Cmd("USER"          , "daemon"),
   ExecCmd("ENTRYPOINT", "./conf/server-docker.sh", "start")
 )
+dockerExposedPorts ++= Seq(conf.getInt("api.http.port"))
 packageName in Docker := appName
 version in Docker     := appVersion
 
