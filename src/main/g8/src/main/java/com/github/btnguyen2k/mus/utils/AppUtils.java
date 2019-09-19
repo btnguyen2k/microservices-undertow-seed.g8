@@ -121,9 +121,9 @@ public class AppUtils {
     }
 
     private static class MyPartialBytesCallback implements Receiver.PartialBytesCallback, Receiver.ErrorCallback {
-        private int maxSize = 1024, timeoutMs = 10000;
-        private int dataSize = 0, dataTime = 0;
+        private int maxSize, timeoutMs, dataSize = 0, dataTime = 0;
         private long timestamp = System.currentTimeMillis();
+        private boolean done = false;
 
         private ByteArrayOutputStream data = new ByteArrayOutputStream();
         private Exception exception;
@@ -135,21 +135,21 @@ public class AppUtils {
 
         @Override
         public void handle(HttpServerExchange exchange, byte[] message, boolean last) {
-            if (exception != null) {
-                throw exception instanceof RuntimeException ?
-                        (RuntimeException) exception :
-                        new RuntimeException(exception);
-            }
-
             dataSize += message.length;
             if (dataSize > maxSize) {
+                done = true;
                 throw new RequestSizeTooLargeException(dataSize, maxSize);
             }
 
             try {
                 data.write(message);
+                if (last) {
+                    data.flush();
+                }
             } catch (IOException e) {
+                done = true;
                 LOGGER.error(e.getMessage(), e);
+                throw new RuntimeException(e);
             }
 
             dataTime += System.currentTimeMillis() - timestamp;
@@ -157,6 +157,8 @@ public class AppUtils {
                 throw new RequestTimeoutException(dataTime, timeoutMs);
             }
             timestamp = System.currentTimeMillis();
+
+            done = last;
         }
 
         @Override
@@ -167,7 +169,9 @@ public class AppUtils {
 
     private static ApiParams parseParams(HttpServerExchange exchange, int maxSize, int timeoutMs) {
         MyPartialBytesCallback callback = new MyPartialBytesCallback(maxSize, timeoutMs);
-        exchange.getRequestReceiver().receivePartialBytes(callback, callback);
+        while (!callback.done) {
+            exchange.getRequestReceiver().receivePartialBytes(callback, callback);
+        }
         JsonNode dataNode = SerializationUtils.readJson(callback.data.toByteArray());
         ApiParams params = new ApiParams(dataNode);
         exchange.getQueryParameters().forEach((k, v) -> {

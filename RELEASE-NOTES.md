@@ -1,5 +1,11 @@
 # microservices-undertow-seed.g8 Release Notes
 
+## 2019-09-19: template-v2.0.r5
+
+- Fixed bug: request body is sometimes truncated.
+- Other fixes and enhancements.
+
+
 ## 2019-09-08: template-v2.0.r4
 
 - API performance log:
