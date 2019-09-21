@@ -10,11 +10,13 @@ scalaVersion := "$scala_version$"
 // Custom Maven repository
 resolvers += "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases/"
 
-lazy val root = (project in file(".")).enablePlugins(JavaAppPackaging, DockerPlugin).settings(
+lazy val root = (project in file(".")).
+  enablePlugins(JavaAppPackaging, DockerPlugin).
+  settings(
     name         := appName,
     version      := appVersion,
     organization := "$organization$",
-    resolvers += Resolver.url("typesafe", url("http://repo.typesafe.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
+    resolvers += Resolver.url("typesafe", url("https://repo.typesafe.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
 )
 
 /*----------------------------------------------------------------------*/

@@ -8,7 +8,7 @@ To create a new project from template:
 sbt new btnguyen2k/microservices-undertow-seed.g8
 ```
 
-Latest release: [template-v2.0.r5](RELEASE-NOTES.md).
+Latest release: [template-v2.0.r6](RELEASE-NOTES.md).
 
 ## Features
 

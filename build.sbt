@@ -5,16 +5,18 @@ val appName    = conf.getString("app.name").toLowerCase().replaceAll("[_\\.\\W+]
 val appVersion = conf.getString("app.version")
 
 sbtPlugin    := true
-scalaVersion := "2.13.0"
+scalaVersion := "2.13.1"
 
 // Custom Maven repository
 resolvers += "Sonatype OSS Releases" at "https://oss.sonatype.org/content/repositories/releases/"
 
-lazy val root = (project in file(".")).enablePlugins(JavaAppPackaging, DockerPlugin).settings(
+lazy val root = (project in file(".")).
+  enablePlugins(JavaAppPackaging, DockerPlugin/*, GraalVMNativeImagePlugin*/).
+  settings(
     name         := appName,
     version      := appVersion,
     organization := "com.github.btnguyen2k",
-    resolvers += Resolver.url("typesafe", url("http://repo.typesafe.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
+    resolvers += Resolver.url("typesafe", url("https://repo.typesafe.com/typesafe/ivy-releases/"))(Resolver.ivyStylePatterns)
 )
 
 /*----------------------------------------------------------------------*/

@@ -1,5 +1,15 @@
 # microservices-undertow-seed.g8 Release Notes
 
+## 2019-09-21: template-v2.0.r6
+
+- Migrate to `sbt-v1.13.2` and `scala-v2.13.1`
+- `server-docker.sh` & `server-prod.sh`:
+  - Remove deprecated JVM options.
+  - Enable `Graal JIT`
+  - Remove [GC log rotation](https://dzone.com/articles/try-to-avoid-xxusegclogfilerotation).
+- Other fixes and enhancements.
+
+
 ## 2019-09-19: template-v2.0.r5
 
 - Fixed bug: request body is sometimes truncated.
