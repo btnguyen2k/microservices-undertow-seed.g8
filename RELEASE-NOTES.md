@@ -43,7 +43,7 @@
   - `server-prod.sh`: `-J-XX:+UseParallelGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100`
   - `server-docker.sh`: `-J-XX:+UseSerialGC -J-XX:MinHeapFreeRatio=5 -J-XX:MaxHeapFreeRatio=10 -J-XX:-ShrinkHeapInSteps -J-XX:MaxGCPauseMillis=100`
 
-**Breakng changes:**
+**Breaking changes:**
 - **Migrate to `Java11`**.
 - Configuration changes:
   - `api.routes` is replaced by `api.endpoints`
@@ -57,7 +57,7 @@
 - Upgrade dependency libs.
 
 
-## 2018-10-12: template-v2.0.r2
+## 2018-10-12: template-v2.0.r1
 
 First release:
 
